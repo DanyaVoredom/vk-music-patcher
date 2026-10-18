@@ -1,0 +1,25 @@
+# secrets
+patch.keystore
+*.keystore
+*.jks
+*.idsig
+
+# downloaded / built
+pulled.apks
+*.apks
+*.apk
+build/
+work/
+work_*/
+logs/
+re/
+*.apk.idsig
+
+# python
+__pycache__/
+*.pyc
+smali_index.json
+
+# os
+Thumbs.db
+desktop.ini
