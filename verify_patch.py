@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 import sys
 import zipfile
@@ -15,6 +16,7 @@ ROOT = Path(__file__).resolve().parent
 SKIP_NATIVE = "--skip-native" in sys.argv
 ARGS = [value for value in sys.argv[1:] if not value.startswith("--")]
 APK = Path(ARGS[0]) if ARGS else ROOT / "build" / "VK_Music_patched.apk"
+MANIFEST = ROOT / "build" / "patch_manifest.json"
 
 EXPECTED: dict[tuple[str, str], list[str] | None] = {
     ("Lxsna/nnh;", "b()Z"): ["const/4", "return"],
@@ -39,10 +41,7 @@ EXPECTED: dict[tuple[str, str], list[str] | None] = {
     ("Lcom/vk/toggle/d;", "z(Z)Z"): ["const/4", "return"],
     ("Lxsna/kqh;", "d(Lcom/vk/dto/music/MusicTrack;)Z"): ["const/4", "return"],
     ("Lxsna/ppg;", "a()Z"): ["const/4", "return"],
-    (
-        "Lxsna/idv$a;",
-        "c(Ljava/lang/String;Lcom/vk/dto/common/id/UserId;Ljava/lang/Throwable;Lkotlin/jvm/functions/Function0;)V",
-    ): ["return-void"],
+    ("Lxsna/idv$a;", "c(Ljava/lang/String;Lcom/vk/dto/common/id/UserId;Ljava/lang/Throwable;Lkotlin/jvm/functions/Function0;)V"): ["return-void"],
     ("Lxsna/ue4;", "invoke(Ljava/lang/Object;)Ljava/lang/Object;"): None,
     (
         "Lcom/vk/core/preference/Preference;",
@@ -67,6 +66,7 @@ EXPECTED: dict[tuple[str, str], list[str] | None] = {
         "invoke-interface", "move-result-object", "invoke-interface", "move-result-object",
         "invoke-interface", "return-void",
     ],
+    ("Lxsna/c7b;", "invokeSuspend(Ljava/lang/Object;)Ljava/lang/Object;"): None,
 }
 
 CONSTANTS: dict[tuple[str, str], str] = {
@@ -116,7 +116,7 @@ NATIVE: dict[str, list[tuple[int, bytes]]] = {
         (0x7560, bytes.fromhex("c0 03 5f d6")),
     ],
     "lib/armeabi-v7a/libvkcore.so": [
-        (0x34F0, bytes.fromhex("01 20 70 47")),
+        (0x39E4, bytes.fromhex("01 20 70 47")),
         (0x5644, bytes.fromhex("70 47")),
     ],
 }
@@ -134,10 +134,38 @@ def register_overflow(text: str, registers_size: int) -> list[int]:
     return sorted(register for register in used if register >= registers_size)
 
 
-def verify_native(archive: zipfile.ZipFile) -> int:
+def normalize_opcode(name: str) -> str:
+    return name.split("/", 1)[0]
+
+
+def load_manifest() -> dict | None:
+    if not MANIFEST.is_file():
+        return None
+    try:
+        return json.loads(MANIFEST.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        print(f"warning: cannot read manifest: {error}")
+        return None
+
+
+def manifest_expected(manifest: dict) -> dict[tuple[str, str], dict]:
+    out = {}
+    for entry in manifest.get("smali", []):
+        out[(entry["class"], entry["method"])] = entry
+    return out
+
+
+def manifest_native(manifest: dict) -> dict[str, list[tuple[int, bytes]]]:
+    out: dict[str, list[tuple[int, bytes]]] = {}
+    for entry in manifest.get("native", []):
+        out.setdefault(entry["entry"], []).append((entry["offset"], bytes.fromhex(entry["bytes"])))
+    return out
+
+
+def verify_native(archive: zipfile.ZipFile, native: dict[str, list[tuple[int, bytes]]]) -> int:
     failures = 0
     names = set(archive.namelist())
-    for entry, patches in NATIVE.items():
+    for entry, patches in native.items():
         if entry not in names:
             print(f"FAIL {entry}: missing")
             failures += 1
@@ -153,15 +181,46 @@ def verify_native(archive: zipfile.ZipFile) -> int:
     return failures
 
 
+def check_manifest_method(
+    key: tuple[str, str],
+    entry: dict,
+    instructions: list,
+    text: str,
+    registers_size: int,
+) -> tuple[bool, str]:
+    names = [
+        normalize_opcode(i.get_name())
+        for i in instructions
+        if not i.get_name().endswith("-payload")
+    ]
+    expected = [normalize_opcode(name) for name in entry.get("opcodes", [])]
+    overflow = register_overflow(text, registers_size)
+    ok = (
+        (not expected or names == expected)
+        and not overflow
+        and all(value in text for value in entry.get("constants", []))
+        and all(value in text for value in entry.get("required", []))
+        and all(value not in text for value in entry.get("forbidden", []))
+    )
+    note = "" if not overflow else f" OVERFLOW {overflow} of {registers_size}"
+    return ok, note
+
+
 def main() -> int:
     if not APK.is_file():
         print(f"missing apk: {APK}")
         return 1
-    remaining = dict(EXPECTED)
+    manifest = load_manifest()
+    dynamic = manifest is not None
+    expected = manifest_expected(manifest) if dynamic else {}
+    native = manifest_native(manifest) if dynamic else NATIVE
+    if dynamic:
+        print(f"manifest: {len(expected)} methods, {sum(len(v) for v in native.values())} native")
+    remaining = dict(expected) if dynamic else dict(EXPECTED)
     updater_class = False
     updater_call = False
     with zipfile.ZipFile(APK) as archive:
-        failures = 0 if SKIP_NATIVE else verify_native(archive)
+        failures = 0 if SKIP_NATIVE else verify_native(archive, native)
         dex_names = [n for n in archive.namelist() if n.endswith(".dex")]
         for dex_name in dex_names:
             dex = DEX(archive.read(dex_name))
@@ -181,31 +240,39 @@ def main() -> int:
                             if "Lcom/vk/music/updater/UpdateChecker;->check" in text:
                                 updater_call = True
                     key = (key_class, signature)
-                    if key not in EXPECTED:
+                    if key not in remaining:
                         continue
                     code = method.get_code()
                     if code is None:
-                        print(f"FAIL {key_class}->{key[1]}: no code")
+                        print(f"FAIL {key_class}->{signature}: no code")
                         remaining.pop(key, None)
                         failures += 1
                         continue
                     instructions = list(code.get_bc().get_instructions())
-                    names = [i.get_name() for i in instructions]
                     text = " | ".join(f"{i.get_name()} {i.get_output()}" for i in instructions)
-                    overflow = register_overflow(text, code.get_registers_size())
-                    constant = CONSTANTS.get(key)
-                    ok = (
-                        (EXPECTED[key] is None or names == EXPECTED[key])
-                        and not overflow
-                        and (constant is None or constant in text)
-                        and all(value in text for value in REQUIRED_TEXT.get(key, ()))
-                        and all(value not in text for value in FORBIDDEN_TEXT.get(key, ()))
-                    )
-                    note = "" if not overflow else f" OVERFLOW {overflow} of {code.get_registers_size()}"
-                    print(
-                        f"{'OK  ' if ok else 'FAIL'} [{dex_name}] "
-                        f"{key_class}->{key[1]}: {text if EXPECTED[key] is not None else 'scope literals'}{note}"
-                    )
+                    if dynamic:
+                        ok, note = check_manifest_method(key, remaining[key], instructions, text, code.get_registers_size())
+                        label = remaining[key].get("name", signature)
+                        print(
+                            f"{'OK  ' if ok else 'FAIL'} [{dex_name}] "
+                            f"{key_class}->{signature} [{label}]: {text}{note}"
+                        )
+                    else:
+                        names = [i.get_name() for i in instructions]
+                        overflow = register_overflow(text, code.get_registers_size())
+                        constant = CONSTANTS.get(key)
+                        ok = (
+                            (EXPECTED[key] is None or names == EXPECTED[key])
+                            and not overflow
+                            and (constant is None or constant in text)
+                            and all(value in text for value in REQUIRED_TEXT.get(key, ()))
+                            and all(value not in text for value in FORBIDDEN_TEXT.get(key, ()))
+                        )
+                        note = "" if not overflow else f" OVERFLOW {overflow} of {code.get_registers_size()}"
+                        print(
+                            f"{'OK  ' if ok else 'FAIL'} [{dex_name}] "
+                            f"{key_class}->{signature}: {text if EXPECTED[key] is not None else 'scope literals'}{note}"
+                        )
                     if not ok:
                         failures += 1
                     remaining.pop(key, None)
@@ -222,7 +289,8 @@ def main() -> int:
     for key in remaining:
         print(f"MISSING {key[0]}->{key[1]}")
         failures += 1
-    print(f"verified: {len(EXPECTED) - len(remaining)}/{len(EXPECTED)}")
+    total = len(expected) if dynamic else len(EXPECTED)
+    print(f"verified: {total - len(remaining)}/{total}")
     print(f"failures: {failures}")
     return 1 if failures else 0
 

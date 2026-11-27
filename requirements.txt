@@ -1,2 +1,4 @@
 androguard
+capstone
 loguru
+pyelftools
