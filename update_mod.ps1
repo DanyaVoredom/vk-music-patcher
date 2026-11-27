@@ -20,6 +20,7 @@ param(
     [string]$TaskTime = "10:00",
     [string]$SourcePage = "https://norobot.ru/vk-music/",
     [string]$ApkUrl = "",
+    [string]$MirrorUrlTemplate = "https://github.com/DanyaVoredom/DanyExternal-Releases/releases/download/base-{version}/VK_Music_{version}.apk",
     [string]$ExpectedVersion = "",
     [string]$DownloadDir = "",
     [string]$BuildTools = "C:\Android\Sdk\build-tools\36.1.0",
@@ -101,6 +102,12 @@ function Get-ApkSigner {
     return $match.Groups[1].Value.Replace(":", "").ToLowerInvariant()
 }
 
+function Get-MirrorUrl {
+    param([string]$Version)
+    if (-not $MirrorUrlTemplate) { return "" }
+    return $MirrorUrlTemplate.Replace("{version}", $Version)
+}
+
 function Get-TargetRelease {
     if ($ApkUrl) {
         $version = $ExpectedVersion
@@ -109,7 +116,7 @@ function Get-TargetRelease {
             if ($match.Success) { $version = $match.Groups[1].Value }
         }
         if (-not $version) { throw "pass -ExpectedVersion when -ApkUrl has no version" }
-        return [pscustomobject]@{ Version = $version; Url = $ApkUrl }
+        return [pscustomobject]@{ Version = $version; Url = $ApkUrl; FallbackUrl = (Get-MirrorUrl $version) }
     }
 
     Write-Log "check $SourcePage"
@@ -137,24 +144,33 @@ function Get-TargetRelease {
     else {
         $url = "https://files.norobot.ru/VK-Music-$version.apk"
     }
-    return [pscustomobject]@{ Version = $version; Url = $url }
+    return [pscustomobject]@{ Version = $version; Url = $url; FallbackUrl = (Get-MirrorUrl $version) }
 }
 
 function Invoke-Download {
-    param([string]$Url, [string]$Path)
+    param([string]$Url, [string]$FallbackUrl, [string]$Path)
     $part = "$Path.part"
-    for ($attempt = 1; $attempt -le $DownloadRetries; $attempt++) {
-        try {
-            Write-Log "download $Url (attempt $attempt/$DownloadRetries)"
-            Invoke-WebRequest -Uri $Url -OutFile $part -UseBasicParsing -TimeoutSec 900
-            Move-Item -LiteralPath $part -Destination $Path -Force
-            Write-Log "saved $Path"
-            return
-        }
-        catch {
-            Remove-Item -LiteralPath $part -Force -ErrorAction SilentlyContinue
-            if ($attempt -eq $DownloadRetries) { throw }
-            Start-Sleep -Seconds (5 * $attempt)
+    $urls = @($Url)
+    if ($FallbackUrl -and $FallbackUrl -ne $Url) { $urls += $FallbackUrl }
+    foreach ($candidate in $urls) {
+        $lastUrl = $candidate -eq $urls[-1]
+        for ($attempt = 1; $attempt -le $DownloadRetries; $attempt++) {
+            try {
+                Write-Log "download $candidate (attempt $attempt/$DownloadRetries)"
+                Invoke-WebRequest -Uri $candidate -OutFile $part -UseBasicParsing -TimeoutSec 900
+                Move-Item -LiteralPath $part -Destination $Path -Force
+                Write-Log "saved $Path"
+                return
+            }
+            catch {
+                Remove-Item -LiteralPath $part -Force -ErrorAction SilentlyContinue
+                if ($attempt -eq $DownloadRetries) {
+                    if ($lastUrl) { throw }
+                    Write-Log "source download failed, trying mirror" "WARN"
+                    break
+                }
+                Start-Sleep -Seconds (5 * $attempt)
+            }
         }
     }
 }
@@ -344,7 +360,7 @@ else {
     if ((Test-Path -LiteralPath $apkPath) -and $Force) {
         Remove-Item -LiteralPath $apkPath -Force
     }
-    Invoke-Download -Url $release.Url -Path $apkPath
+    Invoke-Download -Url $release.Url -FallbackUrl $release.FallbackUrl -Path $apkPath
 }
 
 $info = Get-ApkInfo $apkPath

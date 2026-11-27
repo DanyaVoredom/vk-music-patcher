@@ -103,7 +103,7 @@ Codeberg Releases не используются для APK: при загруз�
 
 ### Обновление с ПК
 
-`update_mod.ps1` проверяет свежую версию VK Музыки, скачивает APK, проверяет package, versionCode и официальную подпись VK, затем собирает и устанавливает патч.
+`update_mod.ps1` проверяет свежую версию VK Музыки, скачивает APK, проверяет package, versionCode и официальную подпись VK, затем собирает и устанавливает патч. Если `files.norobot.ru` недоступен, скрипт берет базовый APK из GitHub-релиза `base-<версия>` в `DanyVoredom/DanyExternal-Releases`.
 
 ```powershell
 # только проверить и проверить APK
