@@ -75,36 +75,26 @@ $env:VKM_KS_PASS = "yourpass"
 
 `UpdateChecker` встроен в `MainActivity`. При запуске приложение проверяет релизы в `DanyaVoredom/DanyExternal-Releases` (не чаще раза в 5 минут), выбирает последний релиз с тегом `vk-`, сравнивает `versionCode` и `modRevision`, скачивает APK, проверяет SHA-256 и открывает системный установщик. Для установки используется существующий `<package>.fileprovider`, разрешение `REQUEST_INSTALL_PACKAGES` добавляется при сборке.
 
-Репозиторий и API задаются при сборке через `VKM_UPDATE_REPO` и `VKM_UPDATE_API`. По умолчанию это GitHub `DanyaVoredom/DanyExternal-Releases` и список релизов с `per_page=10`. Если релиза нет или сеть недоступна, приложение работает как обычно.
+Репозиторий и API задаются при сборке через `VKM_UPDATE_REPO` и `VKM_UPDATE_API`. По умолчанию это GitHub `DanyaVoredom/DanyExternal-Releases` и список релизов с `per_page=100`. Если релиза нет или сеть недоступна, приложение работает как обычно.
 
 ### Сборка и релизы
 
-Основной контур: Codeberg как git и триггер сборки, GitHub Releases как хранилище APK.
+Основной контур: GitHub Actions собирает APK и публикует его в GitHub Releases. Codeberg используется только как git-зеркало.
 
-- `.forgejo/workflows/build-release.yml` запускается ежедневно в 00:00 МСК, по push в `main` и вручную.
+- `.github/workflows/build-release.yml` запускается ежедневно в 00:00 МСК, по push в `main` и вручную.
 - Проверяет версию на `norobot.ru` и сравнивает с последним тегом `vk-` в `DanyVoredom/DanyExternal-Releases`.
-- Тяжёлая сборка выполняется на self-hosted Forgejo runner, потому что hosted-раннеры Codeberg ограничены 10 минутами, 4 CPU и 8 ГБ.
+- Сборка выполняется на `windows-latest` с build-tools 36.1.0 (если доступны) или самыми новыми.
 - `update_mod.ps1 -NoInstall` собирает APK и пишет `build/update.json`.
-- Workflow публикует `VK_Music_<версия>_patched.apk` и `update.json` в GitHub Releases через `gh` и токен `GH_RELEASES_TOKEN`.
+- Workflow публикует `VK_Music_<версия>_patched.apk` и `update.json` в GitHub Releases через `gh` и токен `RELEASES_TOKEN`.
 
-Runner установлен как systemd-сервис `forgejo-runner` на этой машине. Проверка:
+Для workflow нужны secrets в GitHub `DanyaVoredom/vk-music-patcher`:
 
-```bash
-systemctl status forgejo-runner
-```
-
-Для workflow нужны secrets в Codeberg:
-
-- `GH_RELEASES_TOKEN` - GitHub-токен с доступом к `DanyVoredom/DanyExternal-Releases`.
+- `RELEASES_TOKEN` - GitHub-токен с доступом к `DanyVoredom/DanyExternal-Releases`.
 - `VKM_KS_BASE64` - `patch.keystore` в base64.
-- `VKM_KS_PASS` - пароль keystore, сейчас его нужно добавить вручную.
+- `VKM_KS_PASS` - пароль keystore.
 - `VKM_KS_ALIAS` - опционально, по умолчанию `vkmpatch`.
 
-Страница секретов: `https://codeberg.org/DanyaVoredom/VK/settings/actions/secrets`. Пока `VKM_KS_PASS` не задан, workflow завершается с предупреждением и не собирает релиз.
-
-Codeberg Releases не используются для APK: при загрузке 85 МБ APK и update.json срабатывает quota exceeded.
-
-GitHub Actions-реализация сохранена в `.github/workflows/build-release.yml`. Она собирает на `windows-latest` и публикует в тот же `DanyVoredom/DanyExternal-Releases`; для неё нужен secret `RELEASES_TOKEN` и доступ к workflow-файлам. Codeberg-контур работает независимо.
+Codeberg Releases не используются для APK: при загрузке 85 МБ APK и update.json срабатывает quota exceeded. `.forgejo/workflows/build-release.yml` и self-hosted runner отключены; не включать их на этой машине.
 
 ### Обновление с ПК
 
