@@ -15,6 +15,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt
+      - run: sudo apt-get update && sudo apt-get install -y ripgrep
       - run: python -m compileall -q .
       - run: python -m unittest discover -s tests -v
 
