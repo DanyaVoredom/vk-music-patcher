@@ -3,6 +3,8 @@ patch.keystore
 *.keystore
 *.jks
 *.idsig
+patch.kspass
+*.kspass
 
 # downloaded / built
 pulled.apks

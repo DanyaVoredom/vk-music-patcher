@@ -65,11 +65,36 @@ $env:VKM_KS_PASS = "yourpass"
 
 Пакет патча: `com.uma.musicvk.patched` (ставится рядом с оригиналом `com.uma.musicvk`).
 
+## Автообновление
+
+`update_mod.ps1` проверяет свежую версию VK Музыки, скачивает APK, проверяет package, versionCode и официальную подпись VK, затем собирает и устанавливает патч.
+
+```powershell
+# только проверить и проверить APK
+.\update_mod.ps1 -CheckOnly
+
+# проверить, собрать и установить патч
+.\update_mod.ps1
+
+# сохранить пароль keystore (DPAPI, файл patch.kspass)
+.\update_mod.ps1 -SetPassword
+
+# ежедневная задача в 10:00
+.\update_mod.ps1 -RegisterTask -TaskTime 10:00
+```
+
+Источник по умолчанию - `https://norobot.ru/vk-music/`. Другой APK можно указать через `-ApkUrl` и `-ExpectedVersion`. Подпись проверяется по закреплённому SHA-256 сертификата VK; без совпадения обновление не выполняется.
+
+Для задачи пароль берётся из `patch.kspass` или `VKM_KS_PASS`. Файл `patch.kspass` зашифрован DPAPI и добавлен в `.gitignore`. Задача выполняется от текущего пользователя, поэтому должна быть доступна его сессия и `adb`. Журнал: `logs/update.log`.
+
+Флаги: `-NoInstall` собирает без установки, `-NoBuild` устанавливает уже собранный `build/VK_Music_patched.apk`, `-Force` игнорирует совпадение versionCode.
+
 ## Файлы
 
 Основной пайплайн:
 
 - `build_patch.ps1` - оркестратор
+- `update_mod.ps1` - автообновление: проверка версии, загрузка, сборка, установка
 - `pull_apks.ps1` - извлечение apk с устройства
 - `vk_targets.py` - список целей патча (source + сигнатура метода)
 - `vk_resolve.py` - резолв цели по `.source` через rg
