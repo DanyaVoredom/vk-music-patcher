@@ -59,7 +59,13 @@ function Write-Log {
 
 function Get-ToolPath {
     param([string]$Name)
-    if ($IsWindows) { return (Join-Path $BuildTools "$Name.exe") }
+    if ($IsWindows) {
+        foreach ($ext in @(".exe", ".bat", ".cmd", "")) {
+            $candidate = Join-Path $BuildTools "$Name$ext"
+            if (Test-Path -LiteralPath $candidate) { return $candidate }
+        }
+        return (Join-Path $BuildTools "$Name.exe")
+    }
     return (Join-Path $BuildTools $Name)
 }
 
