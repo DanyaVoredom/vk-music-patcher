@@ -37,6 +37,8 @@ jobs:
       - name: Check upstream
         id: check
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN || github.token }}
         run: |
           $page = Invoke-WebRequest -Uri "https://norobot.ru/vk-music/" -UseBasicParsing -TimeoutSec 60
           $match = [regex]::Match($page.Content, "Версия:\s*([0-9]+(?:\.[0-9]+)+)")
@@ -45,12 +47,17 @@ jobs:
           $skip = $false
           $force = "${{ inputs.force }}" -eq "true"
           if (-not $force) {
-            $latestTag = gh release view --repo $env:GITHUB_REPOSITORY --json tagName --jq ".tagName" 2>$null
-            if ($LASTEXITCODE -eq 0 -and $latestTag) {
-              $tagVersion = [regex]::Match($latestTag, "^vk-([0-9]+(?:\.[0-9]+)+)-").Groups[1].Value
-              if ($tagVersion -and ([version]$tagVersion) -ge ([version]$upstream)) {
-                $skip = $true
+            $tags = @(gh release list --repo DanyaVoredom/DanyExternal-Releases --limit 30 --json tagName --jq ".[].tagName" 2>$null)
+            $latestVersion = $null
+            foreach ($item in $tags) {
+              $tagVersion = [regex]::Match($item, "^vk-([0-9]+(?:\.[0-9]+)+)-").Groups[1].Value
+              if ($tagVersion) {
+                $parsed = [version]$tagVersion
+                if (-not $latestVersion -or $parsed -gt $latestVersion) { $latestVersion = $parsed }
               }
+            }
+            if ($latestVersion -and $latestVersion -ge ([version]$upstream)) {
+              $skip = $true
             }
           }
           if ($skip) { Write-Host "release for $upstream already exists" }
@@ -64,8 +71,9 @@ jobs:
         env:
           VKM_KS_BASE64: ${{ secrets.VKM_KS_BASE64 }}
           VKM_KS_PASS: ${{ secrets.VKM_KS_PASS }}
+          RELEASES_TOKEN: ${{ secrets.RELEASES_TOKEN }}
         run: |
-          if (-not $env:VKM_KS_BASE64 -or -not $env:VKM_KS_PASS) {
+          if (-not $env:VKM_KS_BASE64 -or -not $env:VKM_KS_PASS -or -not $env:RELEASES_TOKEN) {
             Write-Host "::warning::VKM_KS_BASE64 or VKM_KS_PASS is not configured; release build skipped"
             "ready=false" >> $env:GITHUB_OUTPUT
           }
@@ -119,7 +127,7 @@ jobs:
         env:
           VKM_KS_PASS: ${{ secrets.VKM_KS_PASS }}
           VKM_KS_ALIAS: ${{ secrets.VKM_KS_ALIAS }}
-          VKM_UPDATE_REPO: ${{ github.repository }}
+          VKM_UPDATE_REPO: DanyaVoredom/DanyExternal-Releases
           VKM_UPDATE_API: https://api.github.com/repos/{repo}/releases?per_page=10
         run: |
           $alias = if ($env:VKM_KS_ALIAS) { $env:VKM_KS_ALIAS } else { "vkmpatch" }
@@ -136,23 +144,25 @@ jobs:
       - name: Publish release
         if: steps.check.outputs.skip != 'true' && steps.secrets.outputs.ready == 'true'
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
         run: |
           $meta = Get-Content "build/update.json" -Raw | ConvertFrom-Json
           $tag = "vk-$($meta.versionName)-$($meta.modRevision)"
-          $existing = gh release view $tag --repo $env:GITHUB_REPOSITORY --json isDraft 2>$null
+          $existing = gh release view $tag --repo DanyaVoredom/DanyExternal-Releases --json isDraft 2>$null
           if ($LASTEXITCODE -eq 0) {
             $state = $existing | ConvertFrom-Json
             if (-not $state.isDraft) {
               Write-Host "release $tag already exists"
               exit 0
             }
-            gh release delete $tag --repo $env:GITHUB_REPOSITORY --yes --cleanup-tag
+            gh release delete $tag --repo DanyaVoredom/DanyExternal-Releases --yes --cleanup-tag
             if ($LASTEXITCODE -ne 0) { throw "release delete failed" }
           }
           $notes = "VK Music $($meta.versionName), mod revision $($meta.modRevision), commit $($meta.commit)"
-          gh release create $tag --draft --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "VK Music $($meta.versionName) mod $($meta.modRevision)" --notes $notes
+          gh release create $tag --draft --repo DanyaVoredom/DanyExternal-Releases --title "VK Music $($meta.versionName) mod $($meta.modRevision)" --notes $notes
           if ($LASTEXITCODE -ne 0) { throw "release create failed" }
-          gh release upload $tag "build/$($meta.apk)" "build/update.json" --repo $env:GITHUB_REPOSITORY --clobber
+          gh release upload $tag "build/$($meta.apk)" "build/update.json" --repo DanyaVoredom/DanyExternal-Releases --clobber
           if ($LASTEXITCODE -ne 0) { throw "release upload failed" }
-          gh release edit $tag --draft=false --repo $env:GITHUB_REPOSITORY
+          gh release edit $tag --draft=false --repo DanyaVoredom/DanyExternal-Releases
           if ($LASTEXITCODE -ne 0) { throw "release publish failed" }

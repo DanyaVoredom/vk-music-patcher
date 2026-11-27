@@ -73,32 +73,38 @@ $env:VKM_KS_PASS = "yourpass"
 
 ### Внутри APK
 
-`UpdateChecker` встроен в `MainActivity`. При запуске приложение проверяет последний GitHub Release (не чаще раза в 5 минут), сравнивает `versionCode` и `modRevision`, скачивает APK, проверяет SHA-256 и открывает системный установщик. Для установки используется существующий `<package>.fileprovider`, разрешение `REQUEST_INSTALL_PACKAGES` добавляется при сборке.
+`UpdateChecker` встроен в `MainActivity`. При запуске приложение проверяет релизы в `DanyaVoredom/DanyExternal-Releases` (не чаще раза в 5 минут), выбирает последний релиз с тегом `vk-`, сравнивает `versionCode` и `modRevision`, скачивает APK, проверяет SHA-256 и открывает системный установщик. Для установки используется существующий `<package>.fileprovider`, разрешение `REQUEST_INSTALL_PACKAGES` добавляется при сборке.
 
-Проверяется только релиз из `VKM_UPDATE_REPO` (локально по умолчанию `FANATFANATA/vk-music-patcher`). Если репозиторий форкнут, задайте `$env:VKM_UPDATE_REPO = "owner/repo"` перед локальной сборкой. Если релиза нет или сеть недоступна, приложение работает как обычно.
+Репозиторий и API задаются при сборке через `VKM_UPDATE_REPO` и `VKM_UPDATE_API`. По умолчанию это GitHub `DanyaVoredom/DanyExternal-Releases` и список релизов с `per_page=10`. Если релиза нет или сеть недоступна, приложение работает как обычно.
 
-### Сборка на GitHub Actions
+### Сборка и релизы
 
-`.github/workflows/build-release.yml` запускается по push в `main`, ежедневно в 00:00 МСК и вручную. Он:
+Основной контур: Codeberg как git и триггер сборки, GitHub Releases как хранилище APK.
 
-1. Проверяет версию на `norobot.ru`.
-2. Сравнивает её с версией из тега последнего релиза. Если версия уже выпущена, работа завершается.
-3. Собирает APK с `VKM_MOD_REVISION = github.run_number`.
-4. Проверяет пакет и публикует релиз: основной артефакт `VK_Music_<версия>_patched.apk`, рядом `update.json` с версией и SHA-256 для встроенного апдейтера.
+- `.forgejo/workflows/build-release.yml` запускается ежедневно в 00:00 МСК, по push в `main` и вручную.
+- Проверяет версию на `norobot.ru` и сравнивает с последним тегом `vk-` в `DanyVoredom/DanyExternal-Releases`.
+- Тяжёлая сборка выполняется на self-hosted Forgejo runner, потому что hosted-раннеры Codeberg ограничены 10 минутами, 4 CPU и 8 ГБ.
+- `update_mod.ps1 -NoInstall` собирает APK и пишет `build/update.json`.
+- Workflow публикует `VK_Music_<версия>_patched.apk` и `update.json` в GitHub Releases через `gh` и токен `GH_RELEASES_TOKEN`.
 
-Для workflow нужны secrets:
+Runner установлен как systemd-сервис `forgejo-runner` на этой машине. Проверка:
 
-- `VKM_KS_BASE64` - `patch.keystore` в base64.
-- `VKM_KS_PASS` - пароль keystore.
-- `VKM_KS_ALIAS` - опционально, по умолчанию `vkmpatch`.
-
-```powershell
-[Convert]::ToBase64String([IO.File]::ReadAllBytes("patch.keystore")) | Set-Clipboard
+```bash
+systemctl status forgejo-runner
 ```
 
-Релизный APK подписывается этим keystore. Локальные сборки, которые должны обновляться с GitHub, обязаны использовать тот же ключ.
+Для workflow нужны secrets в Codeberg:
 
-Если репозиторий переименован или форкнут, workflow передаёт `VKM_UPDATE_REPO` автоматически. Для принудительной сборки используйте `workflow_dispatch` с `force`.
+- `GH_RELEASES_TOKEN` - GitHub-токен с доступом к `DanyVoredom/DanyExternal-Releases`.
+- `VKM_KS_BASE64` - `patch.keystore` в base64.
+- `VKM_KS_PASS` - пароль keystore, сейчас его нужно добавить вручную.
+- `VKM_KS_ALIAS` - опционально, по умолчанию `vkmpatch`.
+
+Страница секретов: `https://codeberg.org/DanyaVoredom/VK/settings/actions/secrets`. Пока `VKM_KS_PASS` не задан, workflow завершается с предупреждением и не собирает релиз.
+
+Codeberg Releases не используются для APK: при загрузке 85 МБ APK и update.json срабатывает quota exceeded.
+
+GitHub Actions-реализация сохранена в `.github/workflows/build-release.yml`. Она собирает на `windows-latest` и публикует в тот же `DanyVoredom/DanyExternal-Releases`; для неё нужен secret `RELEASES_TOKEN` и доступ к workflow-файлам. Codeberg-контур работает независимо.
 
 ### Обновление с ПК
 
