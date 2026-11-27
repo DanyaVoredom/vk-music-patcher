@@ -167,21 +167,22 @@ jobs:
           VKM_UPDATE_API: https://api.github.com/repos/{repo}/releases?per_page=100
         run: |
           $alias = if ($env:VKM_KS_ALIAS) { $env:VKM_KS_ALIAS } else { "vkmpatch" }
-          $arguments = @(
-            "-NoInstall",
-            "-BuildTools", "$env:BUILD_TOOLS",
-            "-ApkToolJar", "$env:APKTOOL_JAR",
-            "-KeyAlias", $alias,
-            "-ModRevision", "${{ github.run_number }}"
-          )
+          $parameters = @{
+            NoInstall = $true
+            BuildTools = $env:BUILD_TOOLS
+            ApkToolJar = $env:APKTOOL_JAR
+            KeyAlias = $alias
+            ModRevision = "${{ github.run_number }}"
+          }
           $apkUrl = $env:INPUT_APK_URL
           if (-not $apkUrl -and $env:INPUT_VERSION) {
             $apkUrl = "https://github.com/DanyaVoredom/DanyExternal-Releases/releases/download/base-$($env:INPUT_VERSION)/VK_Music_$($env:INPUT_VERSION).apk"
           }
           if ($apkUrl) {
-            $arguments += @("-ApkUrl", $apkUrl, "-ExpectedVersion", "${{ steps.check.outputs.upstream }}")
+            $parameters.ApkUrl = $apkUrl
+            $parameters.ExpectedVersion = "${{ steps.check.outputs.upstream }}"
           }
-          .\update_mod.ps1 @arguments
+          .\update_mod.ps1 @parameters
 
       - name: Upload patch manifest
         if: always() && steps.check.outputs.skip != 'true' && steps.secrets.outputs.ready == 'true'
