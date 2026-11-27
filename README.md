@@ -25,18 +25,22 @@
 - Восстановление входа после холодного запуска через резервное хранилище сессии и ключа шифрования.
 - Резолв целей по `.source`, устойчивый к реобфускации.
 - Нативные правки `libvkcore.so` (arm64-v8a и armeabi-v7a).
-- Верификация результата: `verify_patch.py` проверяет инструкции и регистры, `verify_package.py` - пакет, authorities, компоненты.
+- Встроенная проверка обновлений мода через GitHub Releases.
+- CI собирает патч на GitHub Actions и публикует APK с манифестом обновления.
+- Верификация результата: `verify_patch.py` проверяет инструкции, регистры и апдейтер; `verify_package.py` - пакет, authorities, компоненты и разрешение на установку.
 
 ## Требования
 
 - Windows, PowerShell 7+
 - JDK 21+
 - Python 3.10+
-- apktool 3.0.3+ (`C:\Windows\apktool.jar` или правь `$ApkToolJar`)
-- Android build-tools 36.x (zipalign, apksigner) - правь `$BuildTools`
+- apktool 3.0.3+ (`C:\Windows\apktool.jar` или `-ApkToolJar`)
+- Android build-tools 36.x (zipalign, apksigner) - `-BuildTools`
 - adb
 - ripgrep (`rg`) в PATH
 - keystore - свой, положить как `patch.keystore` (в .gitignore)
+
+Если apktool падает на `private resources` в `values-v34`, удалите старый `%LOCALAPPDATA%\apktool\framework\1.apk` и повторите сборку: apktool 3.0.3 создаст встроенный framework.
 
 Python-пакеты нужны только для verify-скриптов:
 
@@ -67,6 +71,37 @@ $env:VKM_KS_PASS = "yourpass"
 
 ## Автообновление
 
+### Внутри APK
+
+`UpdateChecker` встроен в `MainActivity`. При запуске приложение проверяет последний GitHub Release (не чаще раза в 5 минут), сравнивает `versionCode` и `modRevision`, скачивает APK, проверяет SHA-256 и открывает системный установщик. Для установки используется существующий `<package>.fileprovider`, разрешение `REQUEST_INSTALL_PACKAGES` добавляется при сборке.
+
+Проверяется только релиз из `VKM_UPDATE_REPO` (локально по умолчанию `FANATFANATA/vk-music-patcher`). Если репозиторий форкнут, задайте `$env:VKM_UPDATE_REPO = "owner/repo"` перед локальной сборкой. Если релиза нет или сеть недоступна, приложение работает как обычно.
+
+### Сборка на GitHub Actions
+
+`.github/workflows/build-release.yml` запускается по push в `main`, ежедневно в 00:00 МСК и вручную. Он:
+
+1. Проверяет версию на `norobot.ru`.
+2. Сравнивает её с версией из тега последнего релиза. Если версия уже выпущена, работа завершается.
+3. Собирает APK с `VKM_MOD_REVISION = github.run_number`.
+4. Проверяет пакет и публикует релиз: основной артефакт `VK_Music_<версия>_patched.apk`, рядом `update.json` с версией и SHA-256 для встроенного апдейтера.
+
+Для workflow нужны secrets:
+
+- `VKM_KS_BASE64` - `patch.keystore` в base64.
+- `VKM_KS_PASS` - пароль keystore.
+- `VKM_KS_ALIAS` - опционально, по умолчанию `vkmpatch`.
+
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("patch.keystore")) | Set-Clipboard
+```
+
+Релизный APK подписывается этим keystore. Локальные сборки, которые должны обновляться с GitHub, обязаны использовать тот же ключ.
+
+Если репозиторий переименован или форкнут, workflow передаёт `VKM_UPDATE_REPO` автоматически. Для принудительной сборки используйте `workflow_dispatch` с `force`.
+
+### Обновление с ПК
+
 `update_mod.ps1` проверяет свежую версию VK Музыки, скачивает APK, проверяет package, versionCode и официальную подпись VK, затем собирает и устанавливает патч.
 
 ```powershell
@@ -87,7 +122,7 @@ $env:VKM_KS_PASS = "yourpass"
 
 Для задачи пароль берётся из `patch.kspass` или `VKM_KS_PASS`. Файл `patch.kspass` зашифрован DPAPI и добавлен в `.gitignore`. Задача выполняется от текущего пользователя, поэтому должна быть доступна его сессия и `adb`. Журнал: `logs/update.log`.
 
-Флаги: `-NoInstall` собирает без установки, `-NoBuild` устанавливает уже собранный `build/VK_Music_patched.apk`, `-Force` игнорирует совпадение versionCode.
+Флаги: `-NoInstall` собирает без установки, `-NoBuild` устанавливает уже собранный `build/VK_Music_patched.apk`, `-Force` игнорирует совпадение versionCode. Локальная сборка с `-ModRevision N` создаёт APK с этой ревизией апдейтера.
 
 ## Файлы
 
@@ -99,6 +134,8 @@ $env:VKM_KS_PASS = "yourpass"
 - `vk_targets.py` - список целей патча (source + сигнатура метода)
 - `vk_resolve.py` - резолв цели по `.source` через rg
 - `vk_patch.py` - применение правок smali
+- `vk_updater.py` - встраивание апдейтера, ревизии и разрешения на установку
+- `updater/` - исходник апдейтера и готовый smali
 - `vk_package.py` - переименование пакета
 - `patch_native.py` - правка libvkcore.so
 - `axml_rename.py` - правка имени пакета в бинарном AndroidManifest.xml (для сплитов)
@@ -131,7 +168,7 @@ $env:VKM_KS_PASS = "yourpass"
 
 ## CI
 
-`.github/workflows/ci.yml` проверяет синтаксис Python (`compileall`) и парсинг PowerShell-скриптов на каждый push и pull request в `main`.
+`.github/workflows/ci.yml` проверяет синтаксис Python (`compileall`) и парсинг PowerShell-скриптов на каждый push и pull request в `main`. `.github/workflows/build-release.yml` собирает и публикует релизы.
 
 ## Лицензия
 

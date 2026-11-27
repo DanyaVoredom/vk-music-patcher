@@ -38,13 +38,14 @@ def resolve_resource_string(apk: APK, value: str) -> str:
     return value
 
 
-def manifest_facts(apk_path: Path) -> tuple[str, set[str], set[str], set[str]]:
+def manifest_facts(apk_path: Path) -> tuple[str, set[str], set[str], set[str], set[str]]:
     apk = APK(str(apk_path))
     manifest = apk.get_android_manifest_xml()
     package = manifest.get("package", "")
     authorities: set[str] = set()
     components: set[str] = set()
     permissions: set[str] = set()
+    uses_permissions: set[str] = set()
     root = manifest.find("application")
     if root is not None:
         for tag in COMPONENT_TAGS:
@@ -63,7 +64,11 @@ def manifest_facts(apk_path: Path) -> tuple[str, set[str], set[str], set[str]]:
         name = node.get("{http://schemas.android.com/apk/res/android}name", "")
         if name:
             permissions.add(name)
-    return package, authorities, components, permissions
+    for node in manifest.iter("uses-permission"):
+        name = node.get("{http://schemas.android.com/apk/res/android}name", "")
+        if name:
+            uses_permissions.add(name)
+    return package, authorities, components, permissions, uses_permissions
 
 
 def missing_classes(components: set[str], classes: set[str]) -> set[str]:
@@ -82,12 +87,20 @@ def missing_classes(components: set[str], classes: set[str]) -> set[str]:
 def main() -> int:
     original_classes = dex_classes(ORIGINAL)
     patched_classes = dex_classes(PATCHED)
-    original_package, original_authorities, original_components, original_permissions = (
-        manifest_facts(ORIGINAL)
-    )
-    patched_package, patched_authorities, patched_components, patched_permissions = (
-        manifest_facts(PATCHED)
-    )
+    (
+        original_package,
+        original_authorities,
+        original_components,
+        original_permissions,
+        original_uses_permissions,
+    ) = manifest_facts(ORIGINAL)
+    (
+        patched_package,
+        patched_authorities,
+        patched_components,
+        patched_permissions,
+        patched_uses_permissions,
+    ) = manifest_facts(PATCHED)
 
     failures = 0
 
@@ -104,6 +117,12 @@ def main() -> int:
         failures += 1
     else:
         print("OK   no authority collides with the original app")
+
+    if "android.permission.REQUEST_INSTALL_PACKAGES" not in patched_uses_permissions:
+        print("FAIL install permission missing")
+        failures += 1
+    else:
+        print("OK   install permission present")
 
     shared_permissions = sorted(original_permissions & patched_permissions)
     if shared_permissions:

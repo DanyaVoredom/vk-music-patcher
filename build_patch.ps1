@@ -3,6 +3,9 @@ param(
     [string]$Package = "com.uma.musicvk",
     [string]$Apk = "",
     [string]$Apks = "pulled.apks",
+    [string]$ApkToolJar = "C:\Windows\apktool.jar",
+    [string]$BuildTools = "C:\Android\Sdk\build-tools\36.1.0",
+    [string]$KeyAlias = "vkmpatch",
     [switch]$Pull,
     [switch]$Build,
     [switch]$Install,
@@ -13,10 +16,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $Root = $PSScriptRoot
-$ApkToolJar = "C:\Windows\apktool.jar"
-$BuildTools = "C:\Android\Sdk\build-tools\36.1.0"
 $Keystore = Join-Path $Root "patch.keystore"
-$KeyAlias = "vkmpatch"
 $OutPackage = "$Package.patched"
 $Activity = "com.vk.music.screens.main.MainActivity"
 $Work = Join-Path $Root "work"
@@ -47,6 +47,10 @@ function Invoke-PatchWork {
     Write-Step "patch code"
     & python (Join-Path $Root "vk_patch.py") $WorkDir
     if ($LASTEXITCODE -ne 0) { throw "vk_patch failed" }
+
+    Write-Step "patch updater"
+    & python (Join-Path $Root "vk_updater.py") $WorkDir
+    if ($LASTEXITCODE -ne 0) { throw "vk_updater failed" }
 }
 
 function Invoke-Sign {

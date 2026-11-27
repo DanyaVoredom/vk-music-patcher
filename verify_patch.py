@@ -121,6 +121,11 @@ NATIVE: dict[str, list[tuple[int, bytes]]] = {
     ],
 }
 
+UPDATER_CLASS = "Lcom/vk/music/updater/UpdateChecker;"
+UPDATER_METHOD = "check(Landroid/app/Activity;)V"
+MAIN_ACTIVITY = "Lcom/vk/music/screens/main/MainActivity;"
+MAIN_CREATE = "onCreate(Landroid/os/Bundle;)V"
+
 REGISTER_PATTERN = re.compile(r"\bv(\d+)\b")
 
 
@@ -153,6 +158,8 @@ def main() -> int:
         print(f"missing apk: {APK}")
         return 1
     remaining = dict(EXPECTED)
+    updater_class = False
+    updater_call = False
     with zipfile.ZipFile(APK) as archive:
         failures = 0 if SKIP_NATIVE else verify_native(archive)
         dex_names = [n for n in archive.namelist() if n.endswith(".dex")]
@@ -162,6 +169,17 @@ def main() -> int:
                 key_class = cls.get_name()
                 for method in cls.get_methods():
                     signature = method.get_name() + method.get_descriptor().replace(" ", "")
+                    if key_class == UPDATER_CLASS and signature == UPDATER_METHOD:
+                        updater_class = True
+                    if key_class == MAIN_ACTIVITY and signature == MAIN_CREATE:
+                        code = method.get_code()
+                        if code is not None:
+                            text = " | ".join(
+                                f"{i.get_name()} {i.get_output()}"
+                                for i in code.get_bc().get_instructions()
+                            )
+                            if "Lcom/vk/music/updater/UpdateChecker;->check" in text:
+                                updater_call = True
                     key = (key_class, signature)
                     if key not in EXPECTED:
                         continue
@@ -191,6 +209,16 @@ def main() -> int:
                     if not ok:
                         failures += 1
                     remaining.pop(key, None)
+    if updater_class:
+        print("OK   updater class")
+    else:
+        print("FAIL updater class missing")
+        failures += 1
+    if updater_call:
+        print("OK   updater call in MainActivity")
+    else:
+        print("FAIL updater call missing in MainActivity")
+        failures += 1
     for key in remaining:
         print(f"MISSING {key[0]}->{key[1]}")
         failures += 1

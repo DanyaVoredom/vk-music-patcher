@@ -16,6 +16,9 @@ param(
     [string]$ExpectedVersion = "",
     [string]$DownloadDir = "",
     [string]$BuildTools = "C:\Android\Sdk\build-tools\36.1.0",
+    [string]$ApkToolJar = "C:\Windows\apktool.jar",
+    [string]$KeyAlias = "vkmpatch",
+    [string]$ModRevision = $env:VKM_MOD_REVISION,
     [string]$Package = "com.uma.musicvk",
     [string]$PatchedPackage = "com.uma.musicvk.patched",
     [string]$SignerSha256 = "59f04db2cce0467ef340ba22aeddebb49b6be80bb2be6fa6982467358fcdcc5a",
@@ -31,7 +34,10 @@ if (-not $DownloadDir) { $DownloadDir = $Root }
 if (-not $KsPassFile) { $KsPassFile = Join-Path $Root "patch.kspass" }
 $LogDir = Join-Path $Root "logs"
 $LogPath = Join-Path $LogDir "update.log"
-$BuiltApk = Join-Path $Root "build\VK_Music_patched.apk"
+$BuildDir = Join-Path $Root "build"
+$BuiltApk = Join-Path $BuildDir "VK_Music_patched.apk"
+if (-not $ModRevision) { $ModRevision = "0" }
+if ($ModRevision -notmatch "^\d+$") { throw "ModRevision must be an integer" }
 
 New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
 New-Item -ItemType Directory -Path $DownloadDir -Force | Out-Null
@@ -177,12 +183,40 @@ function Invoke-BuildPatch {
     param([string]$ApkPath)
     $script = Join-Path $Root "build_patch.ps1"
     $pwshPath = if ($IsWindows) { Join-Path $PSHOME "pwsh.exe" } else { (Get-Command pwsh).Source }
-    $arguments = @("-NoProfile", "-File", $script, "-Apk", $ApkPath, "-Build")
+    $arguments = @(
+        "-NoProfile", "-File", $script, "-Apk", $ApkPath, "-Build",
+        "-BuildTools", $BuildTools, "-ApkToolJar", $ApkToolJar, "-KeyAlias", $KeyAlias
+    )
     if (-not $NoInstall) { $arguments += "-Install" }
     if ($NoLaunch) { $arguments += "-NoLaunch" }
     Write-Log ("run build_patch: " + ($arguments -join " "))
     & $pwshPath @arguments
     if ($LASTEXITCODE -ne 0) { throw "build_patch failed with exit code $LASTEXITCODE" }
+}
+
+function Write-ReleaseMetadata {
+    param([pscustomobject]$Info, [string]$ApkPath)
+    New-Item -ItemType Directory -Path $BuildDir -Force | Out-Null
+    $assetName = "VK_Music_$($Info.VersionName)_patched.apk"
+    $releaseApk = Join-Path $BuildDir $assetName
+    Copy-Item -LiteralPath $ApkPath -Destination $releaseApk -Force
+    $hash = (Get-FileHash -LiteralPath $releaseApk -Algorithm SHA256).Hash.ToLowerInvariant()
+    $commit = $env:GITHUB_SHA
+    if (-not $commit) {
+        try { $commit = (& git -C $Root rev-parse HEAD 2>$null | Out-String).Trim() } catch { $commit = "" }
+    }
+    $metadata = [ordered]@{
+        versionName = $Info.VersionName
+        versionCode = $Info.VersionCode
+        modRevision = [int]$ModRevision
+        apk = $assetName
+        sha256 = $hash
+        size = (Get-Item -LiteralPath $releaseApk).Length
+        commit = $commit
+    }
+    $path = Join-Path $BuildDir "update.json"
+    $metadata | ConvertTo-Json | Set-Content -LiteralPath $path -Encoding utf8
+    Write-Log "release metadata: $path"
 }
 
 function Install-BuiltApk {
@@ -283,6 +317,7 @@ if ($NoBuild) {
         throw "built APK versionCode $($built.VersionCode) is older than $($info.VersionCode)"
     }
     Write-Log "using existing $BuiltApk"
+    Write-ReleaseMetadata -Info $built -ApkPath $BuiltApk
     if (-not $NoInstall) { Install-BuiltApk }
     return
 }
@@ -290,6 +325,8 @@ if ($NoBuild) {
 if (-not $KsPass) { $KsPass = Read-KsPassword }
 if (-not $KsPass) { throw "set VKM_KS_PASS or run -SetPassword" }
 $env:VKM_KS_PASS = $KsPass
+$env:VKM_MOD_REVISION = $ModRevision
 
 Invoke-BuildPatch -ApkPath $apkPath
-Write-Log "update finished: $($info.VersionName) versionCode $($info.VersionCode)"
+Write-ReleaseMetadata -Info $info -ApkPath $BuiltApk
+Write-Log "update finished: $($info.VersionName) versionCode $($info.VersionCode) modRevision $ModRevision"
