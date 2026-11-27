@@ -9,28 +9,28 @@ WORK = ROOT / (sys.argv[1] if len(sys.argv) > 1 else "work")
 PATCHES = {
     "lib/arm64-v8a/libvkcore.so": [
         {
-            "name": "sub_4F30 verify result",
-            "offset": 0x4F30,
+            "name": "sub_4FD8 verify result",
+            "offset": 0x4FD8,
             "expect": bytes.fromhex("fd 7b ba a9"),
             "patch": bytes.fromhex("20 00 80 52 c0 03 5f d6"),
         },
         {
-            "name": "sub_74B8 exit handler",
-            "offset": 0x74B8,
+            "name": "sub_7560 exit handler",
+            "offset": 0x7560,
             "expect": bytes.fromhex("ff c3 00 d1"),
             "patch": bytes.fromhex("c0 03 5f d6"),
         },
     ],
     "lib/armeabi-v7a/libvkcore.so": [
         {
-            "name": "sub_3440 verify result",
-            "offset": 0x3440,
+            "name": "sub_34F0 verify result",
+            "offset": 0x34F0,
             "expect": bytes.fromhex("f0 b5 03 af"),
             "patch": bytes.fromhex("01 20 70 47"),
         },
         {
-            "name": "sub_5594 exit handler",
-            "offset": 0x5594,
+            "name": "sub_5644 exit handler",
+            "offset": 0x5644,
             "expect": bytes.fromhex("d0 b5 02 af"),
             "patch": bytes.fromhex("70 47"),
         },

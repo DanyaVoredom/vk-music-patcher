@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import re
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -77,6 +79,10 @@ def patch_manifest(text: str) -> str:
 
 
 def patch_strings(text: str) -> str:
+    text = text.replace(
+        '<string name="vk_music_file_provider_authority">com.vk.vkmusic.provider</string>',
+        f'<string name="vk_music_file_provider_authority">{FILEPROVIDER_AUTHORITY}</string>',
+    )
     declaration = f'<string name="{APP_LABEL_RESOURCE}">{APP_LABEL}</string>'
     if f'name="{APP_LABEL_RESOURCE}"' in text:
         return text
@@ -86,15 +92,16 @@ def patch_strings(text: str) -> str:
 
 
 def scan_smali_targets(work: Path) -> list[Path]:
-    hits = []
-    for path in work.rglob("*.smali"):
-        try:
-            text = path.read_text(encoding="utf-8", errors="ignore")
-        except OSError:
-            continue
-        if any(n in text for n in SMALI_RENAMES):
-            hits.append(path)
-    return hits
+    rg = shutil.which("rg") or "rg"
+    hits: set[Path] = set()
+    for needle in SMALI_RENAMES:
+        proc = subprocess.run(
+            [rg, "-l", "--no-messages", "-F", "-g", "*.smali", needle, str(work)],
+            capture_output=True,
+            text=True,
+        )
+        hits.update(Path(line) for line in proc.stdout.splitlines() if line)
+    return sorted(hits)
 
 
 def main() -> int:

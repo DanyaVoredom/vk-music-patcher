@@ -1,25 +1,28 @@
 # VK Music Patcher
 
-Пайплайн для сборки модифицированной VK Музыки (Android) из установленной оригинальной версии. Патч разблокирует подписку и оффлайн-треки.
+Пайплайн для сборки модифицированной VK Музыки (Android) из APK или установленной оригинальной версии. Патч разблокирует подписку и оффлайн-треки.
 
 ## Как это работает
 
 1. `pull_apks.ps1` - вытягивает base.apk и сплиты установленной оригинальной версии через adb, собирает в `pulled.apks`.
-2. `build_patch.ps1 -Build` - распаковывает apks, декомпилирует base через apktool, патчит:
+2. `build_patch.ps1 -Build` - принимает APK или `pulled.apks`, декомпилирует base через apktool и патчит:
    - `vk_package.py` - переименование пакета в `.patched` (side-by-side с оригиналом), правка authorities и метки.
-   - `vk_patch.py` - целевые правки smali (подписка, оффлайн, ограничения).
+   - `vk_patch.py` - целевые правки smali (подписка, оффлайн, ограничения и восстановление сессии после холодного запуска).
    - `patch_native.py` - правка нативного `libvkcore.so`.
-3. `build_patch.ps1 -Build` собирает base через apktool, сплиты перепаковывает через `axml_rename.py` (правка бинарного манифеста без apktool), всё подписывает.
-4. `build_patch.ps1 -Install` - `adb install-multiple -r` поверх установленного патча. Данные и логин сохраняются.
+3. Для универсального APK собирает и подписывает один APK; для `pulled.apks` собирает base и перепаковывает сплиты через `axml_rename.py`.
+4. `build_patch.ps1 -Install` устанавливает APK или набор сплитов поверх патча. Данные и логин сохраняются.
 
 ## Ключевая идея: резолв по `.source`
 
-Обфусцированные имена классов и методов меняются от версии к версии (gdm, uhm, fo9...). Пайплайн не хардкодит их. Вместо этого цели ищутся по оригинальным именам Kotlin-файлов, которые сохраняются в директиве `.source` smali-класса (`MusicSubscriptionProviderImpl.kt`, `CurrentAccountInformation.kt` и т.д.). Поиск через ripgrep. Это переживает реобфускацию: при обновлении VK цели находятся автоматически.
+Обфусцированные имена классов меняются от версии к версии (gdm, uhm, fo9...). Классы не хардкодятся: цели ищутся по оригинальным именам Kotlin-файлов, которые сохраняются в директиве `.source` smali-класса (`MusicSubscriptionProviderImpl.kt`, `CurrentAccountInformation.kt` и т.д.). Поиск через ripgrep. Сигнатуры методов при обновлении версии всё равно нужно сверять: R8 может изменить их вместе с телами.
+
+Текущие цели и native offsets проверены на VK Музыке 8.53 (versionCode 15193). Для другой версии их нужно сверить заново; `verify_patch.py` для этого хранит точные обфусцированные классы и методы проверяемой версии.
 
 ## Возможности
 
 - Side-by-side установка: патч `com.uma.musicvk.patched` ставится рядом с оригиналом `com.uma.musicvk`.
 - Сохранение данных и логина при переустановке поверх патча.
+- Восстановление входа после холодного запуска через резервное хранилище сессии и ключа шифрования.
 - Резолв целей по `.source`, устойчивый к реобфускации.
 - Нативные правки `libvkcore.so` (arm64-v8a и armeabi-v7a).
 - Верификация результата: `verify_patch.py` проверяет инструкции и регистры, `verify_package.py` - пакет, authorities, компоненты.
@@ -49,6 +52,9 @@ $env:VKM_KS_PASS = "yourpass"
 
 # полный цикл: вытянуть оригу, собрать, поставить
 .\build_patch.ps1 -Pull -Build -Install
+
+# собрать универсальный APK из скачанного RuStore
+.\build_patch.ps1 -Apk "VK_Music_<версия>.apk" -Build -Install
 
 # только пересобрать из уже вытянутого pulled.apks
 .\build_patch.ps1 -Build -Install
@@ -84,7 +90,7 @@ $env:VKM_KS_PASS = "yourpass"
 - `patch_subscription.py`, `patch_migration.py`, `patch_trace.py`, `patch_package.py` - точечные патчи и трейсинг
 - `find_sources.py`, `resolve_targets.py`, `index_scan.py`, `check_remaining.py` - разовые инструменты анализа smali
 
-Вариант 8.45:
+Устаревшие скрипты 8.45:
 
 - `build_845.ps1` - отдельный оркестратор
 - `patch_package_845.py`, `patch_subscription_845.py`, `patch_migration_845.py`, `patch_native_845.py`
@@ -92,13 +98,15 @@ $env:VKM_KS_PASS = "yourpass"
 
 ## Обновление при выходе новой версии VK
 
-1. Обновить оригинал в RuStore.
-2. `.\build_patch.ps1 -Pull -Build -Install`
-3. Если обфускация сдвинула сигнатуры методов - поправить `vk_targets.py` (цели ищутся по `.source`, но сигнатуры тел могут измениться).
+1. Получить APK конкретной версии и проверить package/version metadata.
+2. Проверить цели в `vk_targets.py` по `.source` и сигнатурам методов в smali.
+3. Проверить native offsets и ожидаемые байты в `patch_native.py` на `libvkcore.so` из того же APK.
+4. Обновить проверки в `verify_patch.py`, собрать и запустить верификацию до установки.
+5. Использовать `.\build_patch.ps1 -Apk "VK_Music_<версия>.apk" -Build -Install` или `.\build_patch.ps1 -Pull -Build -Install`.
 
 ## CI
 
-`.forgejo/workflows/ci.yml` проверяет синтаксис Python (`compileall`) и парсинг PowerShell-скриптов на каждый push в `dev` и `prod`.
+`.github/workflows/ci.yml` проверяет синтаксис Python (`compileall`) и парсинг PowerShell-скриптов на каждый push и pull request в `main`.
 
 ## Лицензия
 

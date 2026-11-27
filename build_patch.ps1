@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
     [string]$Package = "com.uma.musicvk",
+    [string]$Apk = "",
     [string]$Apks = "pulled.apks",
     [switch]$Pull,
     [switch]$Build,
@@ -30,7 +31,64 @@ function Invoke-Pull {
     if ($LASTEXITCODE -ne 0) { throw "pull failed" }
 }
 
-function Invoke-Unpack {
+function Invoke-UnpackApk {
+    param([string]$Path, [string]$Out)
+    if (Test-Path -LiteralPath $Out) { Remove-Item -LiteralPath $Out -Recurse -Force }
+    & java -Xmx6g "-Duser.language=en" "-Dfile.encoding=UTF8" -jar $ApkToolJar d $Path -o $Out -f
+    if ($LASTEXITCODE -ne 0) { throw "apktool failed" }
+}
+
+function Invoke-PatchWork {
+    param([string]$WorkDir)
+    Write-Step "patch package"
+    & python (Join-Path $Root "vk_package.py") $WorkDir
+    if ($LASTEXITCODE -ne 0) { throw "vk_package failed" }
+
+    Write-Step "patch code"
+    & python (Join-Path $Root "vk_patch.py") $WorkDir
+    if ($LASTEXITCODE -ne 0) { throw "vk_patch failed" }
+}
+
+function Invoke-Sign {
+    param([string]$InputPath, [string]$OutputPath)
+    & (Join-Path $BuildTools "apksigner.bat") sign --ks $Keystore --ks-key-alias $KeyAlias --ks-pass "pass:$KsPass" --key-pass "pass:$KsPass" --v2-signing-enabled true --v3-signing-enabled true --out $OutputPath $InputPath
+    if ($LASTEXITCODE -ne 0) { throw "apksigner failed: $OutputPath" }
+}
+
+function Invoke-BuildUniversal {
+    param([string]$ApkPath)
+    if (-not (Test-Path -LiteralPath $ApkPath)) { throw "missing apk: $ApkPath" }
+    New-Item -ItemType Directory -Path $BuildDir -Force | Out-Null
+
+    Invoke-UnpackApk -Path $ApkPath -Out $Work
+    Invoke-PatchWork -WorkDir $Work
+
+    Write-Step "patch native"
+    & python (Join-Path $Root "patch_native.py") $Work
+    if ($LASTEXITCODE -ne 0) { throw "patch_native failed" }
+
+    $unsigned = Join-Path $BuildDir "unsigned.apk"
+    $aligned = Join-Path $BuildDir "aligned.apk"
+    $final = Join-Path $BuildDir "VK_Music_patched.apk"
+
+    Write-Step "apktool build"
+    & java -Xmx6g "-Duser.language=en" "-Dfile.encoding=UTF8" -jar $ApkToolJar b $Work -o $unsigned
+    if ($LASTEXITCODE -ne 0) { throw "apktool build failed" }
+
+    Write-Step "zipalign"
+    & (Join-Path $BuildTools "zipalign.exe") -f -p 4 $unsigned $aligned | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "zipalign failed" }
+
+    Write-Step "sign"
+    Invoke-Sign -InputPath $aligned -OutputPath $final
+    Remove-Item -LiteralPath $unsigned, $aligned -Force
+
+    $script:FinalParts = @($final)
+    $script:OutputApk = $final
+    $script:Universal = $true
+}
+
+function Invoke-BuildSplits {
     Write-Step "unpack apks"
     $tmp = Join-Path $BuildDir "apks"
     if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Recurse -Force }
@@ -41,9 +99,8 @@ function Invoke-Unpack {
     $base = Join-Path $tmp "base.apk"
     if (-not (Test-Path -LiteralPath $base)) { throw "no base.apk in $Apks" }
 
-    if (Test-Path -LiteralPath $Work) { Remove-Item -LiteralPath $Work -Recurse -Force }
-    & java -Xmx6g "-Duser.language=en" "-Dfile.encoding=UTF8" -jar $ApkToolJar d $base -o $Work -f
-    if ($LASTEXITCODE -ne 0) { throw "apktool failed" }
+    Invoke-UnpackApk -Path $base -Out $Work
+    Invoke-PatchWork -WorkDir $Work
 
     $script:SplitDir = Join-Path $BuildDir "split"
     if (Test-Path -LiteralPath $script:SplitDir) { Remove-Item -LiteralPath $script:SplitDir -Recurse -Force }
@@ -53,41 +110,30 @@ function Invoke-Unpack {
     if (Test-Path -LiteralPath $abiSplit) {
         [System.IO.Compression.ZipFile]::ExtractToDirectory($abiSplit, (Join-Path $script:SplitDir "arm64"))
     }
-}
-
-function Invoke-Patch {
-    Write-Step "patch package"
-    & python (Join-Path $Root "vk_package.py") "work"
-    if ($LASTEXITCODE -ne 0) { throw "vk_package failed" }
-
-    Write-Step "patch code"
-    & python (Join-Path $Root "vk_patch.py") "work"
-    if ($LASTEXITCODE -ne 0) { throw "vk_patch failed" }
 
     $so = Join-Path $script:SplitDir "arm64\lib\arm64-v8a\libvkcore.so"
-    if (Test-Path -LiteralPath $so) {
-        Write-Step "patch native"
-        & python (Join-Path $Root "patch_native.py") (Join-Path $script:SplitDir "arm64")
-        if ($LASTEXITCODE -ne 0) { throw "patch_native failed" }
-    }
-}
+    if (-not (Test-Path -LiteralPath $so)) { throw "missing libvkcore.so in $abiSplit" }
 
-function Invoke-Build {
-    if (-not $KsPass) { throw "set -KsPass or VKM_KS_PASS" }
+    Write-Step "patch native"
+    & python (Join-Path $Root "patch_native.py") (Join-Path $script:SplitDir "arm64")
+    if ($LASTEXITCODE -ne 0) { throw "patch_native failed" }
+
     $unsigned = Join-Path $BuildDir "unsigned_base.apk"
-    New-Item -ItemType Directory -Path $BuildDir -Force | Out-Null
+    $aligned = Join-Path $BuildDir "aligned_base.apk"
+    $finalBase = Join-Path $BuildDir "final_base.apk"
 
     Write-Step "apktool b base"
     & java -Xmx6g "-Duser.language=en" "-Dfile.encoding=UTF8" -jar $ApkToolJar b $Work -o $unsigned
     if ($LASTEXITCODE -ne 0) { throw "apktool build failed" }
 
-    Write-Step "sign base"
-    $script:FinalBase = Join-Path $BuildDir "final_base.apk"
-    & (Join-Path $BuildTools "apksigner.bat") sign --ks $Keystore --ks-key-alias $KeyAlias --ks-pass "pass:$KsPass" --key-pass "pass:$KsPass" --v2-signing-enabled true --v3-signing-enabled true --out $script:FinalBase $unsigned
-    if ($LASTEXITCODE -ne 0) { throw "apksigner base failed" }
+    Write-Step "zipalign base"
+    & (Join-Path $BuildTools "zipalign.exe") -f -p 4 $unsigned $aligned | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "zipalign base failed" }
 
-    $script:FinalParts = @($script:FinalBase)
-    $tmp = Join-Path $BuildDir "apks"
+    Write-Step "sign base"
+    Invoke-Sign -InputPath $aligned -OutputPath $finalBase
+
+    $script:FinalParts = @($finalBase)
     foreach ($split in @("split_config.arm64_v8a.apk", "split_config.xxhdpi.apk", "split_config.ru.apk")) {
         $src = Join-Path $tmp $split
         if (-not (Test-Path -LiteralPath $src)) { continue }
@@ -103,15 +149,29 @@ function Invoke-Build {
         $al = "$p.aligned"
         & (Join-Path $BuildTools "zipalign.exe") -f -p 4 $p $al | Out-Null
         $final = Join-Path $BuildDir "final_$name.apk"
-        & (Join-Path $BuildTools "apksigner.bat") sign --ks $Keystore --ks-key-alias $KeyAlias --ks-pass "pass:$KsPass" --key-pass "pass:$KsPass" --v2-signing-enabled true --v3-signing-enabled true --out $final $al | Out-Null
+        Invoke-Sign -InputPath $al -OutputPath $final
         Remove-Item -LiteralPath $p, $al -Force
         $script:FinalParts += $final
     }
+    $script:OutputApk = $finalBase
+    $script:Universal = $false
+}
+
+function Resolve-Apk {
+    if ($Apk) { return (Resolve-Path -LiteralPath $Apk).Path }
+    $candidates = @(Get-ChildItem -LiteralPath $Root -Filter "VK_Music_*.apk" -File | Sort-Object LastWriteTime -Descending)
+    if ($candidates.Count -gt 0) { return $candidates[0].FullName }
+    return ""
 }
 
 function Invoke-Install {
-    Write-Step "install-multiple"
-    $text = (& adb install-multiple -r @script:FinalParts 2>&1 | Out-String)
+    Write-Step "install"
+    if ($script:FinalParts.Count -eq 1) {
+        $text = (& adb install -r $script:FinalParts[0] 2>&1 | Out-String)
+    }
+    else {
+        $text = (& adb install-multiple -r @script:FinalParts 2>&1 | Out-String)
+    }
     Write-Host $text.Trim()
     if ($LASTEXITCODE -ne 0) { throw "install failed" }
     if ($NoLaunch) { return }
@@ -126,8 +186,23 @@ function Invoke-Install {
 
 if ($Pull) { Invoke-Pull }
 if ($Build) {
-    Invoke-Unpack
-    Invoke-Patch
-    Invoke-Build
+    if (-not $KsPass) { throw "set -KsPass or VKM_KS_PASS" }
+    $apkPath = if ($Apk) { (Resolve-Path -LiteralPath $Apk).Path } elseif (-not $Pull) { Resolve-Apk } else { "" }
+    if ($apkPath) {
+        Write-Step "build universal"
+        Invoke-BuildUniversal -ApkPath $apkPath
+    }
+    elseif (Test-Path -LiteralPath $ApksPath) {
+        Write-Step "build splits"
+        Invoke-BuildSplits
+    }
+    else {
+        throw "no apk or apks: put VK_Music_*.apk in $Root or pull with -Pull"
+    }
+    Write-Step "verify"
+    $verifyArgs = @($script:OutputApk)
+    if (-not $script:Universal) { $verifyArgs += "--skip-native" }
+    & python (Join-Path $Root "verify_patch.py") @verifyArgs
+    if ($LASTEXITCODE -ne 0) { throw "verify_patch failed" }
 }
 if ($Install) { Invoke-Install }

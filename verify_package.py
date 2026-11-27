@@ -11,8 +11,8 @@ from androguard.core.apk import APK
 from androguard.core.dex import DEX
 
 ROOT = Path(__file__).resolve().parent
-ORIGINAL = ROOT / "VK Музыка_8.44.apk"
-PATCHED = ROOT / "VK Музыка_8.44_patched.apk"
+ORIGINAL = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "VK_Music_8.53.apk"
+PATCHED = Path(sys.argv[2]) if len(sys.argv) > 2 else ROOT / "build" / "VK_Music_patched.apk"
 COMPONENT_TAGS = ("activity", "activity-alias", "service", "receiver", "provider")
 
 
@@ -24,6 +24,18 @@ def dex_classes(apk_path: Path) -> set[str]:
         for cls in dex.get_classes():
             classes.add(cls.get_name())
     return classes
+
+
+def resolve_resource_string(apk: APK, value: str) -> str:
+    resources = apk.get_android_resources()
+    if resources is None:
+        return value
+    key = value.removeprefix("@string/")
+    for package in resources.get_packages_names():
+        resolved = resources.get_string(package, key)
+        if resolved:
+            return resolved[1]
+    return value
 
 
 def manifest_facts(apk_path: Path) -> tuple[str, set[str], set[str], set[str]]:
@@ -43,14 +55,8 @@ def manifest_facts(apk_path: Path) -> tuple[str, set[str], set[str], set[str]]:
         components.add(root.get("{http://schemas.android.com/apk/res/android}name", ""))
     for node in manifest.iter("provider"):
         value = node.get("{http://schemas.android.com/apk/res/android}authorities", "")
-        if not value:
-            value = node.get(
-                "{http://schemas.android.com/apk/res/android}authorities", ""
-            )
         if value.startswith("@string/"):
-            resource = value.split("/", 1)[1]
-            resolved = apk.get_resolved_strings().get(resource)
-            value = resolved[0] if resolved else value
+            value = resolve_resource_string(apk, value)
         if value:
             authorities.update(part for part in value.split(";") if part)
     for node in manifest.iter("permission"):
