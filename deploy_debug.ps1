@@ -17,7 +17,8 @@ $ApkToolJar = "C:\Windows\apktool.jar"
 $BuildTools = "C:\Android\Sdk\build-tools\36.1.0"
 $Keystore = Join-Path $Root "patch.keystore"
 $KeyAlias = "vkmpatch"
-$KeyPass = "patchvk123"
+$KeyPass = $env:VKM_KS_PASS
+if (-not $KeyPass) { throw "set VKM_KS_PASS" }
 $Activity = "com.vk.music.screens.main.MainActivity"
 
 $Target = switch ($Variant) {

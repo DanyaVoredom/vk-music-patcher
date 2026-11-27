@@ -26,3 +26,5 @@ smali_index.json
 # os
 Thumbs.db
 desktop.ini
+# local keystore password
+patch.kspass.txt
