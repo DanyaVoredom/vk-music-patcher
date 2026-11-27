@@ -47,7 +47,7 @@
         }
     .end annotation
 
-    .line 61
+    .line 62
     iput-object p2, p0, Lcom/vk/music/updater/UpdateChecker$1$1;->val$activity:Landroid/app/Activity;
 
     iput-object p3, p0, Lcom/vk/music/updater/UpdateChecker$1$1;->val$found:Lcom/vk/music/updater/UpdateChecker$Release;
@@ -64,7 +64,7 @@
 .method public run()V
     .registers 3
 
-    .line 64
+    .line 65
     iget-object v0, p0, Lcom/vk/music/updater/UpdateChecker$1$1;->val$activity:Landroid/app/Activity;
 
     iget-object v1, p0, Lcom/vk/music/updater/UpdateChecker$1$1;->val$found:Lcom/vk/music/updater/UpdateChecker$Release;
@@ -72,6 +72,6 @@
     # invokes: Lcom/vk/music/updater/UpdateChecker;->showDialog(Landroid/app/Activity;Lcom/vk/music/updater/UpdateChecker$Release;)V
     invoke-static {v0, v1}, Lcom/vk/music/updater/UpdateChecker;->access$200(Landroid/app/Activity;Lcom/vk/music/updater/UpdateChecker$Release;)V
 
-    .line 65
+    .line 66
     return-void
 .end method

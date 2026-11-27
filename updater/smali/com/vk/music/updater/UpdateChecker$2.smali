@@ -32,7 +32,7 @@
         }
     .end annotation
 
-    .line 103
+    .line 104
     iput-object p1, p0, Lcom/vk/music/updater/UpdateChecker$2;->val$activity:Landroid/app/Activity;
 
     iput-object p2, p0, Lcom/vk/music/updater/UpdateChecker$2;->val$release:Lcom/vk/music/updater/UpdateChecker$Release;
@@ -47,7 +47,7 @@
 .method public onClick(Landroid/content/DialogInterface;I)V
     .registers 5
 
-    .line 106
+    .line 107
     iget-object p1, p0, Lcom/vk/music/updater/UpdateChecker$2;->val$activity:Landroid/app/Activity;
 
     const-string p2, "vk_mod_updater"
@@ -66,7 +66,7 @@
 
     iget-wide v0, p2, Lcom/vk/music/updater/UpdateChecker$Release;->versionCode:J
 
-    .line 107
+    .line 108
     const-string p2, "skipped_code"
 
     invoke-interface {p1, p2, v0, v1}, Landroid/content/SharedPreferences$Editor;->putLong(Ljava/lang/String;J)Landroid/content/SharedPreferences$Editor;
@@ -77,16 +77,16 @@
 
     iget p2, p2, Lcom/vk/music/updater/UpdateChecker$Release;->modRevision:I
 
-    .line 108
+    .line 109
     const-string v0, "skipped_revision"
 
     invoke-interface {p1, v0, p2}, Landroid/content/SharedPreferences$Editor;->putInt(Ljava/lang/String;I)Landroid/content/SharedPreferences$Editor;
 
     move-result-object p1
 
-    .line 109
+    .line 110
     invoke-interface {p1}, Landroid/content/SharedPreferences$Editor;->apply()V
 
-    .line 110
+    .line 111
     return-void
 .end method

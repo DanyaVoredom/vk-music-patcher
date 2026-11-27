@@ -16,6 +16,7 @@ jobs:
           python-version: "3.12"
       - run: pip install -r requirements.txt
       - run: python -m compileall -q .
+      - run: python -m unittest discover -s tests -v
 
   powershell:
     runs-on: ubuntu-latest

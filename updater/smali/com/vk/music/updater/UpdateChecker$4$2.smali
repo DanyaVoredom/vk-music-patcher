@@ -43,7 +43,7 @@
         }
     .end annotation
 
-    .line 144
+    .line 154
     iput-object p2, p0, Lcom/vk/music/updater/UpdateChecker$4$2;->val$activity:Landroid/app/Activity;
 
     iput-object p1, p0, Lcom/vk/music/updater/UpdateChecker$4$2;->this$0:Lcom/vk/music/updater/UpdateChecker$4;
@@ -58,7 +58,7 @@
 .method public run()V
     .registers 4
 
-    .line 147
+    .line 157
     iget-object v0, p0, Lcom/vk/music/updater/UpdateChecker$4$2;->val$activity:Landroid/app/Activity;
 
     const-string v1, "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0441\u043a\u0430\u0447\u0430\u0442\u044c \u043e\u0431\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u0435"
@@ -71,6 +71,6 @@
 
     invoke-virtual {v0}, Landroid/widget/Toast;->show()V
 
-    .line 148
+    .line 158
     return-void
 .end method

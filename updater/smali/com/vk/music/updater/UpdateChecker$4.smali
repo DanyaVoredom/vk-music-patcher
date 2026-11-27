@@ -32,7 +32,7 @@
         }
     .end annotation
 
-    .line 117
+    .line 124
     iput-object p1, p0, Lcom/vk/music/updater/UpdateChecker$4;->val$activity:Landroid/app/Activity;
 
     iput-object p2, p0, Lcom/vk/music/updater/UpdateChecker$4;->val$release:Lcom/vk/music/updater/UpdateChecker$Release;
@@ -47,10 +47,10 @@
 .method public run()V
     .registers 6
 
-    .line 120
+    .line 127
     nop
 
-    .line 122
+    .line 129
     const/4 v0, 0x0
 
     :try_start_2
@@ -66,7 +66,7 @@
 
     invoke-direct {v1, v2, v3}, Ljava/io/File;-><init>(Ljava/io/File;Ljava/lang/String;)V
 
-    .line 123
+    .line 130
     invoke-virtual {v1}, Ljava/io/File;->exists()Z
 
     move-result v2
@@ -81,7 +81,7 @@
 
     goto :goto_24
 
-    .line 124
+    .line 131
     :cond_1c
     new-instance v1, Ljava/lang/IllegalStateException;
 
@@ -91,7 +91,7 @@
 
     throw v1
 
-    .line 126
+    .line 133
     :cond_24
     :goto_24
     new-instance v2, Ljava/io/File;
@@ -100,10 +100,37 @@
 
     invoke-direct {v2, v1, v3}, Ljava/io/File;-><init>(Ljava/io/File;Ljava/lang/String;)V
     :try_end_2b
-    .catchall {:try_start_2 .. :try_end_2b} :catchall_8a
+    .catchall {:try_start_2 .. :try_end_2b} :catchall_9f
 
-    .line 127
+    .line 134
     :try_start_2b
+    invoke-virtual {v2}, Ljava/io/File;->exists()Z
+
+    move-result v0
+
+    if-eqz v0, :cond_40
+
+    invoke-virtual {v2}, Ljava/io/File;->delete()Z
+
+    move-result v0
+
+    if-eqz v0, :cond_38
+
+    goto :goto_40
+
+    .line 135
+    :cond_38
+    new-instance v0, Ljava/lang/IllegalStateException;
+
+    const-string v1, "delete"
+
+    invoke-direct {v0, v1}, Ljava/lang/IllegalStateException;-><init>(Ljava/lang/String;)V
+
+    throw v0
+
+    .line 137
+    :cond_40
+    :goto_40
     iget-object v0, p0, Lcom/vk/music/updater/UpdateChecker$4;->val$release:Lcom/vk/music/updater/UpdateChecker$Release;
 
     iget-object v0, v0, Lcom/vk/music/updater/UpdateChecker$Release;->apkUrl:Ljava/lang/String;
@@ -111,13 +138,13 @@
     # invokes: Lcom/vk/music/updater/UpdateChecker;->download(Ljava/lang/String;Ljava/io/File;)V
     invoke-static {v0, v2}, Lcom/vk/music/updater/UpdateChecker;->access$400(Ljava/lang/String;Ljava/io/File;)V
 
-    .line 128
+    .line 138
     # invokes: Lcom/vk/music/updater/UpdateChecker;->sha256(Ljava/io/File;)Ljava/lang/String;
     invoke-static {v2}, Lcom/vk/music/updater/UpdateChecker;->access$500(Ljava/io/File;)Ljava/lang/String;
 
     move-result-object v0
 
-    .line 129
+    .line 139
     iget-object v1, p0, Lcom/vk/music/updater/UpdateChecker$4;->val$release:Lcom/vk/music/updater/UpdateChecker$Release;
 
     iget-object v1, v1, Lcom/vk/music/updater/UpdateChecker$Release;->sha256:Ljava/lang/String;
@@ -126,9 +153,9 @@
 
     move-result v0
 
-    if-eqz v0, :cond_7f
+    if-eqz v0, :cond_94
 
-    .line 132
+    .line 142
     new-instance v0, Ljava/lang/StringBuilder;
 
     invoke-direct {v0}, Ljava/lang/StringBuilder;-><init>()V
@@ -155,7 +182,7 @@
 
     move-result-object v0
 
-    .line 133
+    .line 143
     invoke-virtual {v2}, Ljava/io/File;->getName()Ljava/lang/String;
 
     move-result-object v1
@@ -168,12 +195,12 @@
 
     move-result-object v0
 
-    .line 132
+    .line 142
     invoke-static {v0}, Landroid/net/Uri;->parse(Ljava/lang/String;)Landroid/net/Uri;
 
     move-result-object v0
 
-    .line 134
+    .line 144
     new-instance v1, Landroid/os/Handler;
 
     invoke-static {}, Landroid/os/Looper;->getMainLooper()Landroid/os/Looper;
@@ -190,11 +217,11 @@
 
     invoke-virtual {v1, v3}, Landroid/os/Handler;->post(Ljava/lang/Runnable;)Z
 
-    .line 150
-    goto :goto_a3
+    .line 160
+    goto :goto_b8
 
-    .line 130
-    :cond_7f
+    .line 140
+    :cond_94
     new-instance v0, Ljava/lang/IllegalStateException;
 
     const-string v1, "sha256"
@@ -202,29 +229,29 @@
     invoke-direct {v0, v1}, Ljava/lang/IllegalStateException;-><init>(Ljava/lang/String;)V
 
     throw v0
-    :try_end_87
-    .catchall {:try_start_2b .. :try_end_87} :catchall_87
+    :try_end_9c
+    .catchall {:try_start_2b .. :try_end_9c} :catchall_9c
 
-    .line 140
-    :catchall_87
+    .line 150
+    :catchall_9c
     move-exception v0
 
     move-object v0, v2
 
-    goto :goto_8b
+    goto :goto_a0
 
-    :catchall_8a
+    :catchall_9f
     move-exception v1
 
-    .line 141
-    :goto_8b
-    if-eqz v0, :cond_90
+    .line 151
+    :goto_a0
+    if-eqz v0, :cond_a5
 
-    .line 142
+    .line 152
     invoke-virtual {v0}, Ljava/io/File;->delete()Z
 
-    .line 144
-    :cond_90
+    .line 154
+    :cond_a5
     new-instance v0, Landroid/os/Handler;
 
     invoke-static {}, Landroid/os/Looper;->getMainLooper()Landroid/os/Looper;
@@ -241,7 +268,7 @@
 
     invoke-virtual {v0, v1}, Landroid/os/Handler;->post(Ljava/lang/Runnable;)Z
 
-    .line 151
-    :goto_a3
+    .line 161
+    :goto_b8
     return-void
 .end method

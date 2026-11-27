@@ -19,9 +19,22 @@ on:
         description: "Build even if the release already exists"
         type: boolean
         default: false
+      dry_run:
+        description: "Build and verify without publishing a release"
+        type: boolean
+        default: false
+      version:
+        description: "Explicit upstream version (skips the source page check)"
+        type: string
+        default: ""
+      apk_url:
+        description: "Explicit upstream APK URL (optional)"
+        type: string
+        default: ""
 
 permissions:
   contents: write
+  issues: write
 
 concurrency:
   group: build-release
@@ -32,6 +45,8 @@ jobs:
     runs-on: windows-latest
     env:
       GH_TOKEN: ${{ github.token }}
+      INPUT_VERSION: ${{ inputs.version }}
+      INPUT_APK_URL: ${{ inputs.apk_url }}
     steps:
       - uses: actions/checkout@v4
       - name: Check upstream
@@ -40,12 +55,28 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.RELEASES_TOKEN || github.token }}
         run: |
-          $page = Invoke-WebRequest -Uri "https://norobot.ru/vk-music/" -UseBasicParsing -TimeoutSec 60
-          $match = [regex]::Match($page.Content, "Версия:\s*([0-9]+(?:\.[0-9]+)+)")
-          if (-not $match.Success) { throw "upstream version not found" }
-          $upstream = $match.Groups[1].Value
-          $skip = $false
           $force = "${{ inputs.force }}" -eq "true"
+          $requested = "$env:INPUT_VERSION"
+          $apkUrl = "$env:INPUT_APK_URL"
+          if ($requested) {
+            $upstream = $requested
+          }
+          elseif ($apkUrl) {
+            $match = [regex]::Match($apkUrl, "VK[-_]Music[-_]([0-9]+(?:\.[0-9]+)+)")
+            if (-not $match.Success) { throw "pass version when apk_url has no version" }
+            $upstream = $match.Groups[1].Value
+          }
+          else {
+            $page = Invoke-WebRequest -Uri "https://norobot.ru/vk-music/" -UseBasicParsing -TimeoutSec 60
+            $match = [regex]::Match($page.Content, "Версия:\s*([0-9]+(?:\.[0-9]+)+)")
+            if (-not $match.Success) { throw "upstream version not found" }
+            $upstream = $match.Groups[1].Value
+            $urlMatch = [regex]::Match($page.Content, "https://files\.norobot\.ru/VK-Music-([0-9]+(?:\.[0-9]+)+)\.apk")
+            if ($urlMatch.Success -and $urlMatch.Groups[1].Value -ne $upstream) {
+              throw "source page has version $upstream but APK URL has $($urlMatch.Groups[1].Value)"
+            }
+          }
+          $skip = $false
           if (-not $force) {
             $tags = @(gh release list --repo DanyaVoredom/DanyExternal-Releases --limit 100 --json tagName --jq ".[].tagName" 2>$null)
             $latestVersion = $null
@@ -63,7 +94,6 @@ jobs:
           if ($skip) { Write-Host "release for $upstream already exists" }
           "upstream=$upstream" >> $env:GITHUB_OUTPUT
           "skip=$($skip.ToString().ToLower())" >> $env:GITHUB_OUTPUT
-
 
       - name: Check secrets
         id: secrets
@@ -137,7 +167,29 @@ jobs:
           VKM_UPDATE_API: https://api.github.com/repos/{repo}/releases?per_page=100
         run: |
           $alias = if ($env:VKM_KS_ALIAS) { $env:VKM_KS_ALIAS } else { "vkmpatch" }
-          .\update_mod.ps1 -NoInstall -BuildTools "$env:BUILD_TOOLS" -ApkToolJar "$env:APKTOOL_JAR" -KeyAlias $alias -ModRevision "${{ github.run_number }}"
+          $arguments = @(
+            "-NoInstall",
+            "-BuildTools", "$env:BUILD_TOOLS",
+            "-ApkToolJar", "$env:APKTOOL_JAR",
+            "-KeyAlias", $alias,
+            "-ModRevision", "${{ github.run_number }}"
+          )
+          $apkUrl = $env:INPUT_APK_URL
+          if (-not $apkUrl -and $env:INPUT_VERSION) {
+            $apkUrl = "https://github.com/DanyaVoredom/DanyExternal-Releases/releases/download/base-$($env:INPUT_VERSION)/VK_Music_$($env:INPUT_VERSION).apk"
+          }
+          if ($apkUrl) {
+            $arguments += @("-ApkUrl", $apkUrl, "-ExpectedVersion", "${{ steps.check.outputs.upstream }}")
+          }
+          .\update_mod.ps1 @arguments
+
+      - name: Upload patch manifest
+        if: always() && steps.check.outputs.skip != 'true' && steps.secrets.outputs.ready == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: patch-manifest
+          path: build/patch_manifest.json
+          if-no-files-found: warn
 
       - name: Verify package
         if: steps.check.outputs.skip != 'true' && steps.secrets.outputs.ready == 'true'
@@ -148,7 +200,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "verify_package failed" }
 
       - name: Publish release
-        if: steps.check.outputs.skip != 'true' && steps.secrets.outputs.ready == 'true'
+        if: steps.check.outputs.skip != 'true' && steps.secrets.outputs.ready == 'true' && inputs.dry_run != true
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
@@ -168,7 +220,46 @@ jobs:
           $notes = "VK Music $($meta.versionName), mod revision $($meta.modRevision), commit $($meta.commit)"
           gh release create $tag --draft --repo DanyaVoredom/DanyExternal-Releases --title "VK Music $($meta.versionName) mod $($meta.modRevision)" --notes $notes
           if ($LASTEXITCODE -ne 0) { throw "release create failed" }
-          gh release upload $tag "build/$($meta.apk)" "build/update.json" --repo DanyaVoredom/DanyExternal-Releases --clobber
+          gh release upload $tag "build/$($meta.apk)" "build/update.json" "build/patch_manifest.json" --repo DanyaVoredom/DanyExternal-Releases --clobber
           if ($LASTEXITCODE -ne 0) { throw "release upload failed" }
           gh release edit $tag --draft=false --repo DanyaVoredom/DanyExternal-Releases
           if ($LASTEXITCODE -ne 0) { throw "release publish failed" }
+
+      - name: Update base mirror
+        if: steps.check.outputs.skip != 'true' && steps.secrets.outputs.ready == 'true' && inputs.dry_run != true
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+          VKM_VERSION: ${{ steps.check.outputs.upstream }}
+        run: |
+          $tag = "base-$($env:VKM_VERSION)"
+          $asset = "VK_Music_$($env:VKM_VERSION).apk"
+          if (-not (Test-Path -LiteralPath $asset)) { throw "base apk not found: $asset" }
+          $existing = gh release view $tag --repo DanyaVoredom/DanyExternal-Releases --json tagName 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --repo DanyaVoredom/DanyExternal-Releases --title "VK Music $($env:VKM_VERSION) base APK" --notes "Official VK Music $($env:VKM_VERSION) APK used as a CI fallback source."
+            if ($LASTEXITCODE -ne 0) { throw "base release create failed" }
+          }
+          gh release upload $tag $asset --repo DanyaVoredom/DanyExternal-Releases --clobber
+          if ($LASTEXITCODE -ne 0) { throw "base release upload failed" }
+
+  notify:
+    needs: release
+    if: failure()
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update failure issue
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="build-release failed"
+          body="Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          number=$(gh issue list --repo "${{ github.repository }}" --state open --search "$title in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --repo "${{ github.repository }}" --body "$body"
+          else
+            gh issue create --repo "${{ github.repository }}" --title "$title" --body "$body"
+          fi

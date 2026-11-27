@@ -34,7 +34,7 @@
         }
     .end annotation
 
-    .line 48
+    .line 49
     iput-object p1, p0, Lcom/vk/music/updater/UpdateChecker$1;->val$app:Landroid/content/Context;
 
     iput-object p2, p0, Lcom/vk/music/updater/UpdateChecker$1;->val$prefs:Landroid/content/SharedPreferences;
@@ -51,14 +51,14 @@
 .method public run()V
     .registers 6
 
-    .line 52
+    .line 53
     :try_start_0
     # invokes: Lcom/vk/music/updater/UpdateChecker;->fetchLatest()Lcom/vk/music/updater/UpdateChecker$Release;
     invoke-static {}, Lcom/vk/music/updater/UpdateChecker;->access$000()Lcom/vk/music/updater/UpdateChecker$Release;
 
     move-result-object v0
 
-    .line 53
+    .line 54
     if-eqz v0, :cond_42
 
     iget-object v1, p0, Lcom/vk/music/updater/UpdateChecker$1;->val$app:Landroid/content/Context;
@@ -72,7 +72,7 @@
 
     goto :goto_42
 
-    .line 56
+    .line 57
     :cond_f
     iget-object v1, p0, Lcom/vk/music/updater/UpdateChecker$1;->val$prefs:Landroid/content/SharedPreferences;
 
@@ -94,7 +94,7 @@
 
     const-string v2, "skipped_revision"
 
-    .line 57
+    .line 58
     const/4 v3, -0x1
 
     invoke-interface {v1, v2, v3}, Landroid/content/SharedPreferences;->getInt(Ljava/lang/String;I)I
@@ -105,14 +105,14 @@
 
     if-ne v1, v2, :cond_2d
 
-    .line 58
+    .line 59
     return-void
 
-    .line 60
+    .line 61
     :cond_2d
     nop
 
-    .line 61
+    .line 62
     new-instance v1, Landroid/os/Handler;
 
     invoke-static {}, Landroid/os/Looper;->getMainLooper()Landroid/os/Looper;
@@ -131,19 +131,19 @@
     :try_end_41
     .catchall {:try_start_0 .. :try_end_41} :catchall_43
 
-    .line 68
+    .line 69
     goto :goto_44
 
-    .line 54
+    .line 55
     :cond_42
     :goto_42
     return-void
 
-    .line 67
+    .line 68
     :catchall_43
     move-exception v0
 
-    .line 69
+    .line 70
     :goto_44
     return-void
 .end method

@@ -10,6 +10,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.StatFs;
 import android.provider.Settings;
 import android.widget.Toast;
 
@@ -113,6 +114,12 @@ public final class UpdateChecker {
     }
 
     private static void downloadAndInstall(final Activity activity, final Release release) {
+        long required = release.size > 0L ? release.size : 100L * 1024L * 1024L;
+        long available = new StatFs(activity.getCacheDir().getAbsolutePath()).getAvailableBytes();
+        if (available < required + 20L * 1024L * 1024L) {
+            Toast.makeText(activity, "Недостаточно места для обновления", Toast.LENGTH_LONG).show();
+            return;
+        }
         Toast.makeText(activity, "Загрузка обновления", Toast.LENGTH_SHORT).show();
         new Thread(new Runnable() {
             @Override
@@ -124,6 +131,9 @@ public final class UpdateChecker {
                         throw new IllegalStateException("cache");
                     }
                     apk = new File(dir, "VK_Music_update.apk");
+                    if (apk.exists() && !apk.delete()) {
+                        throw new IllegalStateException("delete");
+                    }
                     download(release.apkUrl, apk);
                     String hash = sha256(apk);
                     if (!hash.equalsIgnoreCase(release.sha256)) {
@@ -195,6 +205,7 @@ public final class UpdateChecker {
             result.versionCode = manifest.getLong("versionCode");
             result.modRevision = manifest.optInt("modRevision", 0);
             result.sha256 = manifest.getString("sha256");
+            result.size = manifest.optLong("size", 0L);
             String apkName = manifest.getString("apk");
             for (int i = 0; i < assets.length(); i++) {
                 JSONObject asset = assets.getJSONObject(i);
@@ -295,5 +306,6 @@ public final class UpdateChecker {
         int modRevision;
         String sha256;
         String apkUrl;
+        long size;
     }
 }

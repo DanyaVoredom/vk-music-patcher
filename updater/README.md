@@ -2,7 +2,7 @@
 
 `UpdateChecker.java` is the in-app update checker. It queries the latest GitHub release, compares `versionCode` and `modRevision`, downloads the release APK, verifies its SHA-256, and opens the package installer through the existing `<package>.fileprovider`.
 
-The build does not compile Java. `vk_updater.py` copies the prebuilt smali from `updater/smali`, writes `res/values/vk_mod_revision.xml`, adds the install permission, and injects the call into `MainActivity.onCreate`.
+The build does not compile Java. `vk_updater.py` copies the prebuilt smali from `updater/smali`, writes `res/values/vk_mod_revision.xml`, adds the install permission, and injects the call into `MainActivity.onCreate` and, when present, `MainActivity.onResume`. The check is throttled to once per 5 minutes. Before downloading, the updater checks free space in the cache directory using the manifest `size`; downloads are rejected if there is not enough room.
 
 ## Regenerate smali
 
@@ -35,7 +35,8 @@ The updater expects the latest release to contain `update.json`:
   "versionCode": 15193,
   "modRevision": 123,
   "apk": "VK_Music_8.53_patched.apk",
-  "sha256": "..."
+  "sha256": "...",
+  "size": 85319710
 }
 ```
 

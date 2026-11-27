@@ -125,6 +125,7 @@ UPDATER_CLASS = "Lcom/vk/music/updater/UpdateChecker;"
 UPDATER_METHOD = "check(Landroid/app/Activity;)V"
 MAIN_ACTIVITY = "Lcom/vk/music/screens/main/MainActivity;"
 MAIN_CREATE = "onCreate(Landroid/os/Bundle;)V"
+MAIN_RESUME = "onResume()V"
 
 REGISTER_PATTERN = re.compile(r"\bv(\d+)\b")
 
@@ -219,6 +220,8 @@ def main() -> int:
     remaining = dict(expected) if dynamic else dict(EXPECTED)
     updater_class = False
     updater_call = False
+    updater_resume_seen = False
+    updater_resume_call = False
     with zipfile.ZipFile(APK) as archive:
         failures = 0 if SKIP_NATIVE else verify_native(archive, native)
         dex_names = [n for n in archive.namelist() if n.endswith(".dex")]
@@ -230,7 +233,7 @@ def main() -> int:
                     signature = method.get_name() + method.get_descriptor().replace(" ", "")
                     if key_class == UPDATER_CLASS and signature == UPDATER_METHOD:
                         updater_class = True
-                    if key_class == MAIN_ACTIVITY and signature == MAIN_CREATE:
+                    if key_class == MAIN_ACTIVITY and signature in (MAIN_CREATE, MAIN_RESUME):
                         code = method.get_code()
                         if code is not None:
                             text = " | ".join(
@@ -238,7 +241,12 @@ def main() -> int:
                                 for i in code.get_bc().get_instructions()
                             )
                             if "Lcom/vk/music/updater/UpdateChecker;->check" in text:
-                                updater_call = True
+                                if signature == MAIN_CREATE:
+                                    updater_call = True
+                                else:
+                                    updater_resume_call = True
+                        if signature == MAIN_RESUME:
+                            updater_resume_seen = True
                     key = (key_class, signature)
                     if key not in remaining:
                         continue
@@ -282,10 +290,18 @@ def main() -> int:
         print("FAIL updater class missing")
         failures += 1
     if updater_call:
-        print("OK   updater call in MainActivity")
+        print("OK   updater call in MainActivity.onCreate")
     else:
-        print("FAIL updater call missing in MainActivity")
+        print("FAIL updater call missing in MainActivity.onCreate")
         failures += 1
+    if updater_resume_seen:
+        if updater_resume_call:
+            print("OK   updater call in MainActivity.onResume")
+        else:
+            print("FAIL updater call missing in MainActivity.onResume")
+            failures += 1
+    else:
+        print("OK   MainActivity.onResume absent, updater call skipped")
     for key in remaining:
         print(f"MISSING {key[0]}->{key[1]}")
         failures += 1

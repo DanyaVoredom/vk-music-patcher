@@ -78,35 +78,52 @@ def install_permission(work: Path) -> None:
     print("manifest: install permission added")
 
 
-def install_call(work: Path) -> None:
+def inject_check(work: Path, method_matches, super_marker: str, label: str, required: bool) -> None:
     path = work / MAIN_ACTIVITY
-    if not path.is_file():
-        raise SystemExit(f"missing activity: {path}")
     text, newline = read_text(path)
     lines = text.split("\n")
-    start = next((i for i, line in enumerate(lines) if line.strip() == METHOD), None)
+    start = next((i for i, line in enumerate(lines) if method_matches(line)), None)
     if start is None:
-        raise SystemExit(f"{MAIN_ACTIVITY}: onCreate not found")
+        if required:
+            raise SystemExit(f"{MAIN_ACTIVITY}: {label} not found")
+        print(f"MainActivity: {label} not found, skipped")
+        return
     stop = next((i for i in range(start + 1, len(lines)) if lines[i].strip() == ".end method"), None)
     if stop is None:
-        raise SystemExit(f"{MAIN_ACTIVITY}: onCreate end not found")
+        raise SystemExit(f"{MAIN_ACTIVITY}: {label} end not found")
     if any("Lcom/vk/music/updater/UpdateChecker;->check" in line for line in lines[start:stop]):
-        print("MainActivity: updater call present")
+        print(f"MainActivity: updater call present in {label}")
         return
     super_at = next(
         (
             i
             for i in range(start + 1, stop)
-            if lines[i].strip().startswith("invoke-super")
-            and "->onCreate(Landroid/os/Bundle;)V" in lines[i]
+            if lines[i].strip().startswith("invoke-super") and super_marker in lines[i]
         ),
         None,
     )
     if super_at is None:
-        raise SystemExit(f"{MAIN_ACTIVITY}: super.onCreate not found")
+        if required:
+            raise SystemExit(f"{MAIN_ACTIVITY}: super.{label} not found")
+        print(f"MainActivity: super.{label} not found, skipped")
+        return
     lines.insert(super_at + 1, INVOKE)
     write_text(path, "\n".join(lines), newline)
-    print("MainActivity: updater call added")
+    print(f"MainActivity: updater call added to {label}")
+
+
+def install_call(work: Path) -> None:
+    path = work / MAIN_ACTIVITY
+    if not path.is_file():
+        raise SystemExit(f"missing activity: {path}")
+    inject_check(work, lambda line: line.strip() == METHOD, "->onCreate(Landroid/os/Bundle;)V", "onCreate", True)
+    inject_check(
+        work,
+        lambda line: line.strip().startswith(".method ") and " onResume()V" in line,
+        "->onResume()V",
+        "onResume",
+        False,
+    )
 
 
 def main() -> int:
