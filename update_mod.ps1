@@ -9,6 +9,13 @@ param(
     [switch]$RegisterTask,
     [switch]$UnregisterTask,
     [switch]$SetPassword,
+    [switch]$SetCodebergToken,
+    [switch]$Publish,
+    [switch]$DraftRelease,
+    [string]$CodebergRepo = "DanyaVoredom/VK",
+    [string]$CodebergApi = "https://codeberg.org/api/v1",
+    [string]$CodebergToken = $env:CODEBERG_TOKEN,
+    [string]$CodebergTokenFile = "",
     [string]$TaskName = "VKMusicModAutoUpdate",
     [string]$TaskTime = "10:00",
     [string]$SourcePage = "https://norobot.ru/vk-music/",
@@ -32,6 +39,7 @@ $ErrorActionPreference = "Stop"
 $Root = $PSScriptRoot
 if (-not $DownloadDir) { $DownloadDir = $Root }
 if (-not $KsPassFile) { $KsPassFile = Join-Path $Root "patch.kspass" }
+if (-not $CodebergTokenFile) { $CodebergTokenFile = Join-Path $Root "codeberg.token" }
 $LogDir = Join-Path $Root "logs"
 $LogPath = Join-Path $LogDir "update.log"
 $BuildDir = Join-Path $Root "build"
@@ -179,6 +187,16 @@ function Read-KsPassword {
     finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
 }
 
+function Read-CodebergToken {
+    if (-not (Test-Path -LiteralPath $CodebergTokenFile)) { return "" }
+    if (-not $IsWindows) { throw "encrypted token file is supported only on Windows" }
+    $encrypted = Get-Content -Raw -LiteralPath $CodebergTokenFile
+    $secure = ConvertTo-SecureString $encrypted
+    $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+    try { return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr) }
+    finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
+}
+
 function Invoke-BuildPatch {
     param([string]$ApkPath)
     $script = Join-Path $Root "build_patch.ps1"
@@ -219,6 +237,44 @@ function Write-ReleaseMetadata {
     Write-Log "release metadata: $path"
 }
 
+function Publish-CodebergRelease {
+    if (-not $CodebergToken) { $CodebergToken = Read-CodebergToken }
+    if (-not $CodebergToken) { throw "set CODEBERG_TOKEN or run -SetCodebergToken" }
+    $metaPath = Join-Path $BuildDir "update.json"
+    if (-not (Test-Path -LiteralPath $metaPath)) { throw "missing $metaPath" }
+    $meta = Get-Content -Raw -LiteralPath $metaPath | ConvertFrom-Json
+    $tag = "vk-$($meta.versionName)-$($meta.modRevision)"
+    $base = "$CodebergApi/repos/$CodebergRepo/releases"
+    $headers = @{
+        Authorization = "token $CodebergToken"
+        "User-Agent" = "vk-music-patcher"
+    }
+    $existing = Invoke-WebRequest -Method Get -Uri "$base/tags/$tag" -Headers $headers -SkipHttpErrorCheck
+    if ($existing.StatusCode -eq 200) {
+        Write-Log "release $tag already exists"
+        return
+    }
+    $body = [ordered]@{
+        tag_name = $tag
+        target_commitish = $meta.commit
+        name = "VK Music $($meta.versionName) mod $($meta.modRevision)"
+        body = "VK Music $($meta.versionName), mod revision $($meta.modRevision), commit $($meta.commit)"
+        draft = [bool]$DraftRelease
+        prerelease = $false
+    } | ConvertTo-Json
+    Write-Log "create release $tag"
+    $release = Invoke-RestMethod -Method Post -Uri $base -Headers $headers -ContentType "application/json" -Body $body
+    $releaseId = $release.id
+    if (-not $releaseId) { throw "release id missing" }
+    foreach ($file in @((Join-Path $BuildDir $meta.apk), $metaPath)) {
+        $name = Split-Path -Leaf $file
+        $uri = "$base/$releaseId/assets?name=$([uri]::EscapeDataString($name))"
+        Write-Log "upload $name"
+        Invoke-RestMethod -Method Post -Uri $uri -Headers $headers -Form @{ attachment = Get-Item -LiteralPath $file } | Out-Null
+    }
+    Write-Log "published $tag"
+}
+
 function Install-BuiltApk {
     $adb = Get-Command adb -ErrorAction SilentlyContinue
     if (-not $adb) { throw "adb not found" }
@@ -236,6 +292,14 @@ if ($SetPassword) {
     return
 }
 
+if ($SetCodebergToken) {
+    if (-not $IsWindows) { throw "-SetCodebergToken is supported only on Windows" }
+    $secure = Read-Host "Codeberg token" -AsSecureString
+    $secure | ConvertFrom-SecureString | Set-Content -LiteralPath $CodebergTokenFile -NoNewline -Encoding utf8
+    Write-Log "token saved to $CodebergTokenFile"
+    return
+}
+
 if ($UnregisterTask) {
     if (-not $IsWindows) { throw "-UnregisterTask is supported only on Windows" }
     Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
@@ -249,6 +313,7 @@ if ($RegisterTask) {
     $pwshPath = Join-Path $PSHOME "pwsh.exe"
     $arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -NoLaunch"
     if ($NoInstall) { $arguments += " -NoInstall" }
+    if ($Publish) { $arguments += " -Publish" }
     $action = New-ScheduledTaskAction -Execute $pwshPath -Argument $arguments -WorkingDirectory $Root
     $trigger = New-ScheduledTaskTrigger -Daily -At $at
     $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -MultipleInstances IgnoreNew `
@@ -318,6 +383,7 @@ if ($NoBuild) {
     }
     Write-Log "using existing $BuiltApk"
     Write-ReleaseMetadata -Info $built -ApkPath $BuiltApk
+    if ($Publish) { Publish-CodebergRelease }
     if (-not $NoInstall) { Install-BuiltApk }
     return
 }
@@ -329,4 +395,5 @@ $env:VKM_MOD_REVISION = $ModRevision
 
 Invoke-BuildPatch -ApkPath $apkPath
 Write-ReleaseMetadata -Info $info -ApkPath $BuiltApk
+if ($Publish) { Publish-CodebergRelease }
 Write-Log "update finished: $($info.VersionName) versionCode $($info.VersionCode) modRevision $ModRevision"

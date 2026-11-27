@@ -5,6 +5,7 @@ patch.keystore
 *.idsig
 patch.kspass
 *.kspass
+codeberg.token
 
 # downloaded / built
 pulled.apks

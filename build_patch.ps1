@@ -17,6 +17,8 @@ param(
 $ErrorActionPreference = "Stop"
 $Root = $PSScriptRoot
 $Keystore = Join-Path $Root "patch.keystore"
+$ApkSigner = if ($IsWindows) { Join-Path $BuildTools "apksigner.bat" } else { Join-Path $BuildTools "apksigner" }
+$ZipAlign = if ($IsWindows) { Join-Path $BuildTools "zipalign.exe" } else { Join-Path $BuildTools "zipalign" }
 $OutPackage = "$Package.patched"
 $Activity = "com.vk.music.screens.main.MainActivity"
 $Work = Join-Path $Root "work"
@@ -55,7 +57,7 @@ function Invoke-PatchWork {
 
 function Invoke-Sign {
     param([string]$InputPath, [string]$OutputPath)
-    & (Join-Path $BuildTools "apksigner.bat") sign --ks $Keystore --ks-key-alias $KeyAlias --ks-pass "pass:$KsPass" --key-pass "pass:$KsPass" --v2-signing-enabled true --v3-signing-enabled true --out $OutputPath $InputPath
+    & $ApkSigner sign --ks $Keystore --ks-key-alias $KeyAlias --ks-pass "pass:$KsPass" --key-pass "pass:$KsPass" --v2-signing-enabled true --v3-signing-enabled true --out $OutputPath $InputPath
     if ($LASTEXITCODE -ne 0) { throw "apksigner failed: $OutputPath" }
 }
 
@@ -80,7 +82,7 @@ function Invoke-BuildUniversal {
     if ($LASTEXITCODE -ne 0) { throw "apktool build failed" }
 
     Write-Step "zipalign"
-    & (Join-Path $BuildTools "zipalign.exe") -f -p 4 $unsigned $aligned | Out-Null
+    & $ZipAlign -f -p 4 $unsigned $aligned | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "zipalign failed" }
 
     Write-Step "sign"
@@ -131,7 +133,7 @@ function Invoke-BuildSplits {
     if ($LASTEXITCODE -ne 0) { throw "apktool build failed" }
 
     Write-Step "zipalign base"
-    & (Join-Path $BuildTools "zipalign.exe") -f -p 4 $unsigned $aligned | Out-Null
+    & $ZipAlign -f -p 4 $unsigned $aligned | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "zipalign base failed" }
 
     Write-Step "sign base"
@@ -151,7 +153,7 @@ function Invoke-BuildSplits {
         & python (Join-Path $Root "axml_rename.py") @a
         if ($LASTEXITCODE -ne 0) { throw "axml_rename failed for $split" }
         $al = "$p.aligned"
-        & (Join-Path $BuildTools "zipalign.exe") -f -p 4 $p $al | Out-Null
+        & $ZipAlign -f -p 4 $p $al | Out-Null
         $final = Join-Path $BuildDir "final_$name.apk"
         Invoke-Sign -InputPath $al -OutputPath $final
         Remove-Item -LiteralPath $p, $al -Force

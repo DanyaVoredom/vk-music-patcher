@@ -27,7 +27,7 @@ import java.net.URL;
 import java.security.MessageDigest;
 
 public final class UpdateChecker {
-    private static final String API = "https://api.github.com/repos/FANATFANATA/vk-music-patcher/releases/latest";
+    private static final String API = "https://api.github.com/repos/DanyaVoredom/DanyExternal-Releases/releases?per_page=10";
     private static final String PREFS = "vk_mod_updater";
     private static final long CHECK_INTERVAL_MS = 5L * 60L * 1000L;
 
@@ -167,31 +167,41 @@ public final class UpdateChecker {
     }
 
     private static Release fetchLatest() throws Exception {
-        JSONObject release = new JSONObject(get(API));
-        JSONArray assets = release.getJSONArray("assets");
-        String manifestUrl = null;
-        for (int i = 0; i < assets.length(); i++) {
-            JSONObject asset = assets.getJSONObject(i);
-            if ("update.json".equals(asset.getString("name"))) {
-                manifestUrl = asset.getString("browser_download_url");
-                break;
+        JSONArray releases = new JSONArray(get(API));
+        for (int r = 0; r < releases.length(); r++) {
+            JSONObject release = releases.getJSONObject(r);
+            if (release.optBoolean("draft", false) || release.optBoolean("prerelease", false)) {
+                continue;
             }
-        }
-        if (manifestUrl == null) {
-            return null;
-        }
-        JSONObject manifest = new JSONObject(get(manifestUrl));
-        Release result = new Release();
-        result.versionName = manifest.getString("versionName");
-        result.versionCode = manifest.getLong("versionCode");
-        result.modRevision = manifest.optInt("modRevision", 0);
-        result.sha256 = manifest.getString("sha256");
-        String apkName = manifest.getString("apk");
-        for (int i = 0; i < assets.length(); i++) {
-            JSONObject asset = assets.getJSONObject(i);
-            if (apkName.equals(asset.getString("name"))) {
-                result.apkUrl = asset.getString("browser_download_url");
-                return result;
+            String tag = release.optString("tag_name", "");
+            if (!tag.startsWith("vk-")) {
+                continue;
+            }
+            JSONArray assets = release.getJSONArray("assets");
+            String manifestUrl = null;
+            for (int i = 0; i < assets.length(); i++) {
+                JSONObject asset = assets.getJSONObject(i);
+                if ("update.json".equals(asset.getString("name"))) {
+                    manifestUrl = asset.getString("browser_download_url");
+                    break;
+                }
+            }
+            if (manifestUrl == null) {
+                continue;
+            }
+            JSONObject manifest = new JSONObject(get(manifestUrl));
+            Release result = new Release();
+            result.versionName = manifest.getString("versionName");
+            result.versionCode = manifest.getLong("versionCode");
+            result.modRevision = manifest.optInt("modRevision", 0);
+            result.sha256 = manifest.getString("sha256");
+            String apkName = manifest.getString("apk");
+            for (int i = 0; i < assets.length(); i++) {
+                JSONObject asset = assets.getJSONObject(i);
+                if (apkName.equals(asset.getString("name"))) {
+                    result.apkUrl = asset.getString("browser_download_url");
+                    return result;
+                }
             }
         }
         return null;

@@ -1,0 +1,106 @@
+name: build-release
+
+on:
+  schedule:
+    # 00:00 MSK (UTC+3)
+    - cron: "0 21 * * *"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: self-hosted
+    outputs:
+      skip: ${{ steps.check.outputs.skip }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check upstream
+        id: check
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GH_RELEASES_TOKEN }}
+        run: |
+          $page = Invoke-WebRequest -Uri "https://norobot.ru/vk-music/" -UseBasicParsing -TimeoutSec 60
+          $match = [regex]::Match($page.Content, "Версия:\s*([0-9]+(?:\.[0-9]+)+)")
+          if (-not $match.Success) { throw "upstream version not found" }
+          $upstream = $match.Groups[1].Value
+          $tags = @(gh release list --repo DanyaVoredom/DanyExternal-Releases --limit 30 --json tagName --jq ".[].tagName" 2>$null)
+          $skip = $false
+          $latestVersion = $null
+          foreach ($item in $tags) {
+            $tagVersion = [regex]::Match($item, "^vk-([0-9]+(?:\.[0-9]+)+)-").Groups[1].Value
+            if ($tagVersion) {
+              $parsed = [version]$tagVersion
+              if (-not $latestVersion -or $parsed -gt $latestVersion) { $latestVersion = $parsed }
+            }
+          }
+          if ($latestVersion -and $latestVersion -ge ([version]$upstream)) {
+            $skip = $true
+          }
+          if ($skip) { Write-Host "release for $upstream already exists" }
+          "skip=$($skip.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+
+  build:
+    needs: check
+    if: needs.check.outputs.skip != 'true'
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check secrets
+        id: secrets
+        shell: pwsh
+        env:
+          VKM_KS_BASE64: ${{ secrets.VKM_KS_BASE64 }}
+          VKM_KS_PASS: ${{ secrets.VKM_KS_PASS }}
+          GH_RELEASES_TOKEN: ${{ secrets.GH_RELEASES_TOKEN }}
+        run: |
+          if (-not $env:VKM_KS_BASE64 -or -not $env:VKM_KS_PASS -or -not $env:GH_RELEASES_TOKEN) {
+            Write-Host "::warning::VKM_KS_BASE64 or VKM_KS_PASS is not configured; release build skipped"
+            "ready=false" >> $env:GITHUB_OUTPUT
+          }
+          else {
+            "ready=true" >> $env:GITHUB_OUTPUT
+          }
+      - name: Prepare keystore
+        if: steps.secrets.outputs.ready == 'true'
+        shell: pwsh
+        env:
+          VKM_KS_BASE64: ${{ secrets.VKM_KS_BASE64 }}
+        run: |
+          [IO.File]::WriteAllBytes((Join-Path $PWD "patch.keystore"), [Convert]::FromBase64String($env:VKM_KS_BASE64))
+      - name: Build and publish
+        if: steps.secrets.outputs.ready == 'true'
+        shell: pwsh
+        env:
+          VKM_KS_PASS: ${{ secrets.VKM_KS_PASS }}
+          VKM_KS_ALIAS: ${{ secrets.VKM_KS_ALIAS }}
+          VKM_UPDATE_REPO: DanyaVoredom/DanyExternal-Releases
+          VKM_UPDATE_API: https://api.github.com/repos/{repo}/releases?per_page=10
+        run: |
+          $alias = if ($env:VKM_KS_ALIAS) { $env:VKM_KS_ALIAS } else { "vkmpatch" }
+          $bt = if ($env:BUILD_TOOLS) { $env:BUILD_TOOLS } else { "/home/danypc/Android/Sdk/build-tools/36.1.0" }
+          $at = if ($env:APKTOOL_JAR) { $env:APKTOOL_JAR } else { "/usr/local/share/apktool/apktool.jar" }
+          .\update_mod.ps1 -NoInstall -BuildTools $bt -ApkToolJar $at -KeyAlias $alias -ModRevision "${{ forgejo.run_number }}"
+      - name: Publish GitHub release
+        if: steps.secrets.outputs.ready == 'true'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GH_RELEASES_TOKEN }}
+        run: |
+          $meta = Get-Content "build/update.json" -Raw | ConvertFrom-Json
+          $tag = "vk-$($meta.versionName)-$($meta.modRevision)"
+          $repo = "DanyaVoredom/DanyExternal-Releases"
+          $existing = gh release view $tag --repo $repo --json isDraft 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            $state = $existing | ConvertFrom-Json
+            if (-not $state.isDraft) { Write-Host "release $tag already exists"; exit 0 }
+            gh release delete $tag --repo $repo --yes --cleanup-tag
+          }
+          $notes = "VK Music $($meta.versionName), mod revision $($meta.modRevision), commit $($meta.commit)"
+          gh release create $tag --draft --repo $repo --title "VK Music $($meta.versionName) mod $($meta.modRevision)" --notes $notes
+          if ($LASTEXITCODE -ne 0) { throw "release create failed" }
+          gh release upload $tag "build/$($meta.apk)" "build/update.json" --repo $repo --clobber
+          if ($LASTEXITCODE -ne 0) { throw "release upload failed" }
+          gh release edit $tag --draft=false --repo $repo
+          if ($LASTEXITCODE -ne 0) { throw "release publish failed" }

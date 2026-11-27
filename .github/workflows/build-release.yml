@@ -120,6 +120,7 @@ jobs:
           VKM_KS_PASS: ${{ secrets.VKM_KS_PASS }}
           VKM_KS_ALIAS: ${{ secrets.VKM_KS_ALIAS }}
           VKM_UPDATE_REPO: ${{ github.repository }}
+          VKM_UPDATE_API: https://api.github.com/repos/{repo}/releases?per_page=10
         run: |
           $alias = if ($env:VKM_KS_ALIAS) { $env:VKM_KS_ALIAS } else { "vkmpatch" }
           .\update_mod.ps1 -NoInstall -BuildTools "$env:BUILD_TOOLS" -ApkToolJar "$env:APKTOOL_JAR" -KeyAlias $alias -ModRevision "${{ github.run_number }}"

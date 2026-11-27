@@ -12,7 +12,7 @@
 
 
 # static fields
-.field private static final API:Ljava/lang/String; = "https://api.github.com/repos/FANATFANATA/vk-music-patcher/releases/latest"
+.field private static final API:Ljava/lang/String; = "https://api.github.com/repos/DanyaVoredom/DanyExternal-Releases/releases?per_page=10"
 
 .field private static final CHECK_INTERVAL_MS:J = 0x493e0L
 
@@ -206,7 +206,7 @@
         }
     .end annotation
 
-    .line 233
+    .line 243
     new-instance v0, Ljava/net/URL;
 
     invoke-direct {v0, p0}, Ljava/net/URL;-><init>(Ljava/lang/String;)V
@@ -217,35 +217,35 @@
 
     check-cast p0, Ljava/net/HttpURLConnection;
 
-    .line 234
+    .line 244
     const/16 v0, 0x3a98
 
     invoke-virtual {p0, v0}, Ljava/net/HttpURLConnection;->setConnectTimeout(I)V
 
-    .line 235
+    .line 245
     const v0, 0xea60
 
     invoke-virtual {p0, v0}, Ljava/net/HttpURLConnection;->setReadTimeout(I)V
 
-    .line 236
+    .line 246
     const-string v0, "User-Agent"
 
     const-string v1, "VKMusicModUpdater"
 
     invoke-virtual {p0, v0, v1}, Ljava/net/HttpURLConnection;->setRequestProperty(Ljava/lang/String;Ljava/lang/String;)V
 
-    .line 238
+    .line 248
     :try_start_1d
     invoke-virtual {p0}, Ljava/net/HttpURLConnection;->getResponseCode()I
 
     move-result v0
 
-    .line 239
+    .line 249
     const/16 v1, 0xc8
 
     if-ne v0, v1, :cond_5f
 
-    .line 242
+    .line 252
     new-instance v0, Ljava/io/BufferedInputStream;
 
     invoke-virtual {p0}, Ljava/net/HttpURLConnection;->getInputStream()Ljava/io/InputStream;
@@ -256,7 +256,7 @@
     :try_end_2e
     .catchall {:try_start_1d .. :try_end_2e} :catchall_78
 
-    .line 244
+    .line 254
     :try_start_2e
     new-instance v1, Ljava/io/BufferedOutputStream;
 
@@ -268,13 +268,13 @@
     :try_end_38
     .catchall {:try_start_2e .. :try_end_38} :catchall_5a
 
-    .line 246
+    .line 256
     const/16 p1, 0x2000
 
     :try_start_3a
     new-array p1, p1, [B
 
-    .line 248
+    .line 258
     :goto_3c
     invoke-virtual {v0, p1}, Ljava/io/InputStream;->read([B)I
 
@@ -284,7 +284,7 @@
 
     if-eq v2, v3, :cond_48
 
-    .line 249
+    .line 259
     const/4 v3, 0x0
 
     invoke-virtual {v1, p1, v3, v2}, Ljava/io/BufferedOutputStream;->write([BII)V
@@ -293,57 +293,57 @@
 
     goto :goto_3c
 
-    .line 252
+    .line 262
     :cond_48
     :try_start_48
     invoke-virtual {v1}, Ljava/io/BufferedOutputStream;->close()V
     :try_end_4b
     .catchall {:try_start_48 .. :try_end_4b} :catchall_5a
 
-    .line 253
+    .line 263
     nop
 
-    .line 255
+    .line 265
     :try_start_4c
     invoke-virtual {v0}, Ljava/io/InputStream;->close()V
     :try_end_4f
     .catchall {:try_start_4c .. :try_end_4f} :catchall_78
 
-    .line 256
+    .line 266
     nop
 
-    .line 258
+    .line 268
     invoke-virtual {p0}, Ljava/net/HttpURLConnection;->disconnect()V
 
-    .line 259
+    .line 269
     nop
 
-    .line 260
+    .line 270
     return-void
 
-    .line 252
+    .line 262
     :catchall_55
     move-exception p1
 
     :try_start_56
     invoke-virtual {v1}, Ljava/io/BufferedOutputStream;->close()V
 
-    .line 253
+    .line 263
     throw p1
     :try_end_5a
     .catchall {:try_start_56 .. :try_end_5a} :catchall_5a
 
-    .line 255
+    .line 265
     :catchall_5a
     move-exception p1
 
     :try_start_5b
     invoke-virtual {v0}, Ljava/io/InputStream;->close()V
 
-    .line 256
+    .line 266
     throw p1
 
-    .line 240
+    .line 250
     :cond_5f
     new-instance p1, Ljava/lang/IllegalStateException;
 
@@ -371,13 +371,13 @@
     :try_end_78
     .catchall {:try_start_5b .. :try_end_78} :catchall_78
 
-    .line 258
+    .line 268
     :catchall_78
     move-exception p1
 
     invoke-virtual {p0}, Ljava/net/HttpURLConnection;->disconnect()V
 
-    .line 259
+    .line 269
     throw p1
 .end method
 
@@ -414,7 +414,7 @@
 .end method
 
 .method private static fetchLatest()Lcom/vk/music/updater/UpdateChecker$Release;
-    .registers 9
+    .registers 11
     .annotation system Ldalvik/annotation/Throws;
         value = {
             Ljava/lang/Exception;
@@ -422,189 +422,254 @@
     .end annotation
 
     .line 170
-    new-instance v0, Lorg/json/JSONObject;
+    new-instance v0, Lorg/json/JSONArray;
 
-    const-string v1, "https://api.github.com/repos/FANATFANATA/vk-music-patcher/releases/latest"
+    const-string v1, "https://api.github.com/repos/DanyaVoredom/DanyExternal-Releases/releases?per_page=10"
 
     invoke-static {v1}, Lcom/vk/music/updater/UpdateChecker;->get(Ljava/lang/String;)Ljava/lang/String;
 
     move-result-object v1
 
-    invoke-direct {v0, v1}, Lorg/json/JSONObject;-><init>(Ljava/lang/String;)V
+    invoke-direct {v0, v1}, Lorg/json/JSONArray;-><init>(Ljava/lang/String;)V
 
     .line 171
-    const-string v1, "assets"
-
-    invoke-virtual {v0, v1}, Lorg/json/JSONObject;->getJSONArray(Ljava/lang/String;)Lorg/json/JSONArray;
-
-    move-result-object v0
-
-    .line 172
-    nop
-
-    .line 173
     const/4 v1, 0x0
 
     move v2, v1
 
-    :goto_14
+    :goto_d
     invoke-virtual {v0}, Lorg/json/JSONArray;->length()I
 
     move-result v3
 
-    const-string v4, "browser_download_url"
+    const/4 v4, 0x0
 
-    const-string v5, "name"
+    if-ge v2, v3, :cond_c1
 
-    const/4 v6, 0x0
-
-    if-ge v2, v3, :cond_37
-
-    .line 174
+    .line 172
     invoke-virtual {v0, v2}, Lorg/json/JSONArray;->getJSONObject(I)Lorg/json/JSONObject;
 
     move-result-object v3
 
-    .line 175
-    const-string v7, "update.json"
+    .line 173
+    const-string v5, "draft"
 
-    invoke-virtual {v3, v5}, Lorg/json/JSONObject;->getString(Ljava/lang/String;)Ljava/lang/String;
+    invoke-virtual {v3, v5, v1}, Lorg/json/JSONObject;->optBoolean(Ljava/lang/String;Z)Z
 
-    move-result-object v8
+    move-result v5
 
-    invoke-virtual {v7, v8}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
+    if-nez v5, :cond_bd
 
-    move-result v7
+    const-string v5, "prerelease"
 
-    if-eqz v7, :cond_34
+    invoke-virtual {v3, v5, v1}, Lorg/json/JSONObject;->optBoolean(Ljava/lang/String;Z)Z
+
+    move-result v5
+
+    if-eqz v5, :cond_2a
+
+    .line 174
+    goto/16 :goto_bd
 
     .line 176
-    invoke-virtual {v3, v4}, Lorg/json/JSONObject;->getString(Ljava/lang/String;)Ljava/lang/String;
+    :cond_2a
+    const-string v5, "tag_name"
 
-    move-result-object v2
+    const-string v6, ""
+
+    invoke-virtual {v3, v5, v6}, Lorg/json/JSONObject;->optString(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+
+    move-result-object v5
 
     .line 177
-    goto :goto_38
+    const-string v6, "vk-"
 
-    .line 173
-    :cond_34
-    add-int/lit8 v2, v2, 0x1
+    invoke-virtual {v5, v6}, Ljava/lang/String;->startsWith(Ljava/lang/String;)Z
 
-    goto :goto_14
+    move-result v5
 
-    :cond_37
-    move-object v2, v6
+    if-nez v5, :cond_3c
+
+    .line 178
+    goto/16 :goto_bd
 
     .line 180
-    :goto_38
-    if-nez v2, :cond_3b
+    :cond_3c
+    const-string v5, "assets"
 
-    .line 181
-    return-object v6
-
-    .line 183
-    :cond_3b
-    new-instance v3, Lorg/json/JSONObject;
-
-    invoke-static {v2}, Lcom/vk/music/updater/UpdateChecker;->get(Ljava/lang/String;)Ljava/lang/String;
-
-    move-result-object v2
-
-    invoke-direct {v3, v2}, Lorg/json/JSONObject;-><init>(Ljava/lang/String;)V
-
-    .line 184
-    new-instance v2, Lcom/vk/music/updater/UpdateChecker$Release;
-
-    invoke-direct {v2, v6}, Lcom/vk/music/updater/UpdateChecker$Release;-><init>(Lcom/vk/music/updater/UpdateChecker$1;)V
-
-    .line 185
-    const-string v7, "versionName"
-
-    invoke-virtual {v3, v7}, Lorg/json/JSONObject;->getString(Ljava/lang/String;)Ljava/lang/String;
-
-    move-result-object v7
-
-    iput-object v7, v2, Lcom/vk/music/updater/UpdateChecker$Release;->versionName:Ljava/lang/String;
-
-    .line 186
-    const-string v7, "versionCode"
-
-    invoke-virtual {v3, v7}, Lorg/json/JSONObject;->getLong(Ljava/lang/String;)J
-
-    move-result-wide v7
-
-    iput-wide v7, v2, Lcom/vk/music/updater/UpdateChecker$Release;->versionCode:J
-
-    .line 187
-    const-string v7, "modRevision"
-
-    invoke-virtual {v3, v7, v1}, Lorg/json/JSONObject;->optInt(Ljava/lang/String;I)I
-
-    move-result v7
-
-    iput v7, v2, Lcom/vk/music/updater/UpdateChecker$Release;->modRevision:I
-
-    .line 188
-    const-string v7, "sha256"
-
-    invoke-virtual {v3, v7}, Lorg/json/JSONObject;->getString(Ljava/lang/String;)Ljava/lang/String;
-
-    move-result-object v7
-
-    iput-object v7, v2, Lcom/vk/music/updater/UpdateChecker$Release;->sha256:Ljava/lang/String;
-
-    .line 189
-    const-string v7, "apk"
-
-    invoke-virtual {v3, v7}, Lorg/json/JSONObject;->getString(Ljava/lang/String;)Ljava/lang/String;
+    invoke-virtual {v3, v5}, Lorg/json/JSONObject;->getJSONArray(Ljava/lang/String;)Lorg/json/JSONArray;
 
     move-result-object v3
 
-    .line 190
+    .line 181
     nop
 
-    :goto_70
-    invoke-virtual {v0}, Lorg/json/JSONArray;->length()I
+    .line 182
+    move v5, v1
 
-    move-result v7
+    :goto_44
+    invoke-virtual {v3}, Lorg/json/JSONArray;->length()I
 
-    if-ge v1, v7, :cond_8e
+    move-result v6
 
-    .line 191
-    invoke-virtual {v0, v1}, Lorg/json/JSONArray;->getJSONObject(I)Lorg/json/JSONObject;
+    const-string v7, "browser_download_url"
 
-    move-result-object v7
+    const-string v8, "name"
+
+    if-ge v5, v6, :cond_66
+
+    .line 183
+    invoke-virtual {v3, v5}, Lorg/json/JSONArray;->getJSONObject(I)Lorg/json/JSONObject;
+
+    move-result-object v6
+
+    .line 184
+    const-string v9, "update.json"
+
+    invoke-virtual {v6, v8}, Lorg/json/JSONObject;->getString(Ljava/lang/String;)Ljava/lang/String;
+
+    move-result-object v10
+
+    invoke-virtual {v9, v10}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
+
+    move-result v9
+
+    if-eqz v9, :cond_63
+
+    .line 185
+    invoke-virtual {v6, v7}, Lorg/json/JSONObject;->getString(Ljava/lang/String;)Ljava/lang/String;
+
+    move-result-object v5
+
+    .line 186
+    goto :goto_67
+
+    .line 182
+    :cond_63
+    add-int/lit8 v5, v5, 0x1
+
+    goto :goto_44
+
+    :cond_66
+    move-object v5, v4
+
+    .line 189
+    :goto_67
+    if-nez v5, :cond_6a
+
+    .line 190
+    goto :goto_bd
 
     .line 192
-    invoke-virtual {v7, v5}, Lorg/json/JSONObject;->getString(Ljava/lang/String;)Ljava/lang/String;
+    :cond_6a
+    new-instance v6, Lorg/json/JSONObject;
 
-    move-result-object v8
+    invoke-static {v5}, Lcom/vk/music/updater/UpdateChecker;->get(Ljava/lang/String;)Ljava/lang/String;
 
-    invoke-virtual {v3, v8}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
+    move-result-object v5
 
-    move-result v8
-
-    if-eqz v8, :cond_8b
+    invoke-direct {v6, v5}, Lorg/json/JSONObject;-><init>(Ljava/lang/String;)V
 
     .line 193
-    invoke-virtual {v7, v4}, Lorg/json/JSONObject;->getString(Ljava/lang/String;)Ljava/lang/String;
+    new-instance v5, Lcom/vk/music/updater/UpdateChecker$Release;
+
+    invoke-direct {v5, v4}, Lcom/vk/music/updater/UpdateChecker$Release;-><init>(Lcom/vk/music/updater/UpdateChecker$1;)V
+
+    .line 194
+    const-string v4, "versionName"
+
+    invoke-virtual {v6, v4}, Lorg/json/JSONObject;->getString(Ljava/lang/String;)Ljava/lang/String;
+
+    move-result-object v4
+
+    iput-object v4, v5, Lcom/vk/music/updater/UpdateChecker$Release;->versionName:Ljava/lang/String;
+
+    .line 195
+    const-string v4, "versionCode"
+
+    invoke-virtual {v6, v4}, Lorg/json/JSONObject;->getLong(Ljava/lang/String;)J
+
+    move-result-wide v9
+
+    iput-wide v9, v5, Lcom/vk/music/updater/UpdateChecker$Release;->versionCode:J
+
+    .line 196
+    const-string v4, "modRevision"
+
+    invoke-virtual {v6, v4, v1}, Lorg/json/JSONObject;->optInt(Ljava/lang/String;I)I
+
+    move-result v4
+
+    iput v4, v5, Lcom/vk/music/updater/UpdateChecker$Release;->modRevision:I
+
+    .line 197
+    const-string v4, "sha256"
+
+    invoke-virtual {v6, v4}, Lorg/json/JSONObject;->getString(Ljava/lang/String;)Ljava/lang/String;
+
+    move-result-object v4
+
+    iput-object v4, v5, Lcom/vk/music/updater/UpdateChecker$Release;->sha256:Ljava/lang/String;
+
+    .line 198
+    const-string v4, "apk"
+
+    invoke-virtual {v6, v4}, Lorg/json/JSONObject;->getString(Ljava/lang/String;)Ljava/lang/String;
+
+    move-result-object v4
+
+    .line 199
+    move v6, v1
+
+    :goto_9f
+    invoke-virtual {v3}, Lorg/json/JSONArray;->length()I
+
+    move-result v9
+
+    if-ge v6, v9, :cond_bd
+
+    .line 200
+    invoke-virtual {v3, v6}, Lorg/json/JSONArray;->getJSONObject(I)Lorg/json/JSONObject;
+
+    move-result-object v9
+
+    .line 201
+    invoke-virtual {v9, v8}, Lorg/json/JSONObject;->getString(Ljava/lang/String;)Ljava/lang/String;
+
+    move-result-object v10
+
+    invoke-virtual {v4, v10}, Ljava/lang/String;->equals(Ljava/lang/Object;)Z
+
+    move-result v10
+
+    if-eqz v10, :cond_ba
+
+    .line 202
+    invoke-virtual {v9, v7}, Lorg/json/JSONObject;->getString(Ljava/lang/String;)Ljava/lang/String;
 
     move-result-object v0
 
-    iput-object v0, v2, Lcom/vk/music/updater/UpdateChecker$Release;->apkUrl:Ljava/lang/String;
+    iput-object v0, v5, Lcom/vk/music/updater/UpdateChecker$Release;->apkUrl:Ljava/lang/String;
 
-    .line 194
-    return-object v2
+    .line 203
+    return-object v5
 
-    .line 190
-    :cond_8b
-    add-int/lit8 v1, v1, 0x1
+    .line 199
+    :cond_ba
+    add-int/lit8 v6, v6, 0x1
 
-    goto :goto_70
+    goto :goto_9f
 
-    .line 197
-    :cond_8e
-    return-object v6
+    .line 171
+    :cond_bd
+    :goto_bd
+    add-int/lit8 v2, v2, 0x1
+
+    goto/16 :goto_d
+
+    .line 207
+    :cond_c1
+    return-object v4
 .end method
 
 .method private static get(Ljava/lang/String;)Ljava/lang/String;
@@ -615,7 +680,7 @@
         }
     .end annotation
 
-    .line 201
+    .line 211
     new-instance v0, Ljava/net/URL;
 
     invoke-direct {v0, p0}, Ljava/net/URL;-><init>(Ljava/lang/String;)V
@@ -626,42 +691,42 @@
 
     check-cast p0, Ljava/net/HttpURLConnection;
 
-    .line 202
+    .line 212
     const/16 v0, 0x3a98
 
     invoke-virtual {p0, v0}, Ljava/net/HttpURLConnection;->setConnectTimeout(I)V
 
-    .line 203
+    .line 213
     const/16 v0, 0x4e20
 
     invoke-virtual {p0, v0}, Ljava/net/HttpURLConnection;->setReadTimeout(I)V
 
-    .line 204
+    .line 214
     const-string v0, "User-Agent"
 
     const-string v1, "VKMusicModUpdater"
 
     invoke-virtual {p0, v0, v1}, Ljava/net/HttpURLConnection;->setRequestProperty(Ljava/lang/String;Ljava/lang/String;)V
 
-    .line 205
+    .line 215
     const-string v0, "Accept"
 
     const-string v1, "application/vnd.github+json"
 
     invoke-virtual {p0, v0, v1}, Ljava/net/HttpURLConnection;->setRequestProperty(Ljava/lang/String;Ljava/lang/String;)V
 
-    .line 207
+    .line 217
     :try_start_23
     invoke-virtual {p0}, Ljava/net/HttpURLConnection;->getResponseCode()I
 
     move-result v0
 
-    .line 208
+    .line 218
     const/16 v1, 0xc8
 
     if-ne v0, v1, :cond_44
 
-    .line 211
+    .line 221
     new-instance v0, Ljava/io/BufferedInputStream;
 
     invoke-virtual {p0}, Ljava/net/HttpURLConnection;->getInputStream()Ljava/io/InputStream;
@@ -672,7 +737,7 @@
     :try_end_34
     .catchall {:try_start_23 .. :try_end_34} :catchall_5d
 
-    .line 213
+    .line 223
     :try_start_34
     invoke-static {v0}, Lcom/vk/music/updater/UpdateChecker;->readText(Ljava/io/InputStream;)Ljava/lang/String;
 
@@ -680,29 +745,29 @@
     :try_end_38
     .catchall {:try_start_34 .. :try_end_38} :catchall_3f
 
-    .line 215
+    .line 225
     :try_start_38
     invoke-virtual {v0}, Ljava/io/InputStream;->close()V
     :try_end_3b
     .catchall {:try_start_38 .. :try_end_3b} :catchall_5d
 
-    .line 218
+    .line 228
     invoke-virtual {p0}, Ljava/net/HttpURLConnection;->disconnect()V
 
-    .line 213
+    .line 223
     return-object v1
 
-    .line 215
+    .line 225
     :catchall_3f
     move-exception v1
 
     :try_start_40
     invoke-virtual {v0}, Ljava/io/InputStream;->close()V
 
-    .line 216
+    .line 226
     throw v1
 
-    .line 209
+    .line 219
     :cond_44
     new-instance v1, Ljava/lang/IllegalStateException;
 
@@ -730,13 +795,13 @@
     :try_end_5d
     .catchall {:try_start_40 .. :try_end_5d} :catchall_5d
 
-    .line 218
+    .line 228
     :catchall_5d
     move-exception v0
 
     invoke-virtual {p0}, Ljava/net/HttpURLConnection;->disconnect()V
 
-    .line 219
+    .line 229
     throw v0
 .end method
 
@@ -940,17 +1005,17 @@
         }
     .end annotation
 
-    .line 223
+    .line 233
     new-instance v0, Ljava/io/ByteArrayOutputStream;
 
     invoke-direct {v0}, Ljava/io/ByteArrayOutputStream;-><init>()V
 
-    .line 224
+    .line 234
     const/16 v1, 0x2000
 
     new-array v1, v1, [B
 
-    .line 226
+    .line 236
     :goto_9
     invoke-virtual {p0, v1}, Ljava/io/InputStream;->read([B)I
 
@@ -960,14 +1025,14 @@
 
     if-eq v2, v3, :cond_15
 
-    .line 227
+    .line 237
     const/4 v3, 0x0
 
     invoke-virtual {v0, v1, v3, v2}, Ljava/io/ByteArrayOutputStream;->write([BII)V
 
     goto :goto_9
 
-    .line 229
+    .line 239
     :cond_15
     const-string p0, "UTF-8"
 
@@ -986,14 +1051,14 @@
         }
     .end annotation
 
-    .line 263
+    .line 273
     const-string v0, "SHA-256"
 
     invoke-static {v0}, Ljava/security/MessageDigest;->getInstance(Ljava/lang/String;)Ljava/security/MessageDigest;
 
     move-result-object v0
 
-    .line 264
+    .line 274
     new-instance v1, Ljava/io/BufferedInputStream;
 
     new-instance v2, Ljava/io/FileInputStream;
@@ -1002,13 +1067,13 @@
 
     invoke-direct {v1, v2}, Ljava/io/BufferedInputStream;-><init>(Ljava/io/InputStream;)V
 
-    .line 266
+    .line 276
     const/16 p0, 0x2000
 
     :try_start_12
     new-array p0, p0, [B
 
-    .line 268
+    .line 278
     :goto_14
     invoke-virtual {v1, p0}, Ljava/io/InputStream;->read([B)I
 
@@ -1020,26 +1085,26 @@
 
     if-eq v2, v3, :cond_20
 
-    .line 269
+    .line 279
     invoke-virtual {v0, p0, v4, v2}, Ljava/security/MessageDigest;->update([BII)V
     :try_end_1f
     .catchall {:try_start_12 .. :try_end_1f} :catchall_50
 
     goto :goto_14
 
-    .line 272
+    .line 282
     :cond_20
     invoke-virtual {v1}, Ljava/io/InputStream;->close()V
 
-    .line 273
+    .line 283
     nop
 
-    .line 274
+    .line 284
     invoke-virtual {v0}, Ljava/security/MessageDigest;->digest()[B
 
     move-result-object p0
 
-    .line 275
+    .line 285
     new-instance v0, Ljava/lang/StringBuilder;
 
     array-length v1, p0
@@ -1048,7 +1113,7 @@
 
     invoke-direct {v0, v1}, Ljava/lang/StringBuilder;-><init>(I)V
 
-    .line 276
+    .line 286
     array-length v1, p0
 
     :goto_31
@@ -1056,7 +1121,7 @@
 
     aget-byte v2, p0, v4
 
-    .line 277
+    .line 287
     and-int/lit16 v2, v2, 0xff
 
     invoke-static {v2}, Ljava/lang/Integer;->valueOf(I)Ljava/lang/Integer;
@@ -1075,12 +1140,12 @@
 
     invoke-virtual {v0, v2}, Ljava/lang/StringBuilder;->append(Ljava/lang/String;)Ljava/lang/StringBuilder;
 
-    .line 276
+    .line 286
     add-int/lit8 v4, v4, 0x1
 
     goto :goto_31
 
-    .line 279
+    .line 289
     :cond_4b
     invoke-virtual {v0}, Ljava/lang/StringBuilder;->toString()Ljava/lang/String;
 
@@ -1088,13 +1153,13 @@
 
     return-object p0
 
-    .line 272
+    .line 282
     :catchall_50
     move-exception p0
 
     invoke-virtual {v1}, Ljava/io/InputStream;->close()V
 
-    .line 273
+    .line 283
     throw p0
 .end method
 

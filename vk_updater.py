@@ -37,13 +37,15 @@ def install_smali(work: Path) -> None:
     if target.exists():
         shutil.rmtree(target)
     shutil.copytree(UPDATER_SMALI / "com" / "vk" / "music" / "updater", target)
-    repo = os.environ.get("VKM_UPDATE_REPO", "FANATFANATA/vk-music-patcher")
+    repo = os.environ.get("VKM_UPDATE_REPO", "DanyaVoredom/DanyExternal-Releases")
+    default_api = "https://api.github.com/repos/DanyaVoredom/DanyExternal-Releases/releases?per_page=10"
+    api = os.environ.get("VKM_UPDATE_API", "https://api.github.com/repos/{repo}/releases?per_page=10").format(repo=repo)
     for path in target.glob("*.smali"):
         text = path.read_text(encoding="utf-8")
-        replaced = text.replace("FANATFANATA/vk-music-patcher", repo)
+        replaced = text.replace(default_api, api).replace("DanyaVoredom/DanyExternal-Releases", repo)
         if replaced != text:
             path.write_text(replaced, encoding="utf-8")
-    print(f"copied updater smali: {target.relative_to(work).as_posix()} repo={repo}")
+    print(f"copied updater smali: {target.relative_to(work).as_posix()} api={api}")
 
 
 def install_revision(work: Path, value: int) -> None:
