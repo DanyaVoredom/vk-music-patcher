@@ -121,7 +121,7 @@ def _enclosing(starts: list[int], address: int, text_end: int) -> int:
 
 def _arm64_refs(path: Path, targets: dict[str, int]) -> dict[str, list[int]]:
     from capstone import Cs, CS_ARCH_ARM64, CS_MODE_LITTLE_ENDIAN
-    from capstone.arm64 import ARM64_OP_IMM
+    from capstone.arm64 import ARM64_OP_IMM, ARM64_OP_MEM
 
     _raw, elf = _read_elf(path)
     text = elf.get_section_by_name(".text")
@@ -143,7 +143,7 @@ def _arm64_refs(path: Path, targets: dict[str, int]) -> dict[str, list[int]]:
                 for needle, target in targets.items():
                     if address == target:
                         refs.setdefault(needle, []).append(ins.address)
-        elif ins.mnemonic == "ldr" and len(ins.operands) == 2 and ins.operands[1].type == 3:
+        elif ins.mnemonic == "ldr" and len(ins.operands) == 2 and ins.operands[1].type == ARM64_OP_MEM:
             mem = ins.operands[1].mem
             if mem.base in page:
                 address = page[mem.base] + mem.disp
@@ -185,22 +185,19 @@ def _arm32_refs(path: Path, targets: dict[str, int]) -> dict[str, list[int]]:
                     registers[ins.operands[0].reg] = struct.unpack_from("<I", data, literal - base)[0]
             elif (
                 ins.mnemonic == "add"
-                and ins.operands
-                and ins.operands[-1].type == ARM_OP_REG
-                and ins.operands[-1].reg == ARM_REG_PC
+                and len(ins.operands) >= 2
+                and ins.operands[1].type == ARM_OP_REG
+                and ins.operands[1].reg == ARM_REG_PC
             ):
                 operands = ins.operands
-                if len(operands) == 2 and operands[0].type == ARM_OP_REG and operands[0].reg in registers:
-                    address = (registers[operands[0].reg] + ins.address + 4) & 0xFFFFFFFF
-                elif (
-                    len(operands) == 3
-                    and operands[0].type == ARM_OP_REG
-                    and operands[2].type == ARM_OP_IMM
-                    and operands[0].reg in registers
-                ):
-                    address = (registers[operands[0].reg] + ins.address + 4 + operands[2].imm) & 0xFFFFFFFF
-                else:
+                if operands[0].type != ARM_OP_REG or operands[0].reg not in registers:
                     continue
+                offset = 0
+                if len(operands) == 3:
+                    if operands[2].type != ARM_OP_IMM:
+                        continue
+                    offset = operands[2].imm
+                address = (registers[operands[0].reg] + ins.address + 4 + offset) & 0xFFFFFFFF
                 for needle, target in targets.items():
                     if address == target:
                         refs.setdefault(needle, []).append(start)
