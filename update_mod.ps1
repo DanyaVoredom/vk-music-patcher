@@ -93,9 +93,12 @@ function Get-ApkSigner {
     $output = & $apksigner verify --print-certs $Path 2>&1
     if ($LASTEXITCODE -ne 0) { throw "apksigner rejected $Path" }
     $text = $output -join "`n"
-    $match = [regex]::Match($text, "Signer #1 certificate SHA-256 digest:\s*([0-9a-fA-F]+)")
-    if (-not $match.Success) { throw "cannot read signer certificate from $Path" }
-    return $match.Groups[1].Value.ToLowerInvariant()
+    $match = [regex]::Match($text, "SHA-256 digest:\s*((?:[0-9a-fA-F]{2}:){31}[0-9a-fA-F]{2}|[0-9a-fA-F]{64})")
+    if (-not $match.Success) {
+        Write-Log "apksigner output: $text"
+        throw "cannot read signer certificate from $Path"
+    }
+    return $match.Groups[1].Value.Replace(":", "").ToLowerInvariant()
 }
 
 function Get-TargetRelease {
