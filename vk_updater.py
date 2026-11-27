@@ -38,8 +38,8 @@ def install_smali(work: Path) -> None:
         shutil.rmtree(target)
     shutil.copytree(UPDATER_SMALI / "com" / "vk" / "music" / "updater", target)
     repo = os.environ.get("VKM_UPDATE_REPO", "DanyaVoredom/DanyExternal-Releases")
-    default_api = "https://api.github.com/repos/DanyaVoredom/DanyExternal-Releases/releases?per_page=10"
-    api = os.environ.get("VKM_UPDATE_API", "https://api.github.com/repos/{repo}/releases?per_page=10").format(repo=repo)
+    default_api = "https://api.github.com/repos/DanyaVoredom/DanyExternal-Releases/releases?per_page=100"
+    api = os.environ.get("VKM_UPDATE_API", "https://api.github.com/repos/{repo}/releases?per_page=100").format(repo=repo)
     for path in target.glob("*.smali"):
         text = path.read_text(encoding="utf-8")
         replaced = text.replace(default_api, api).replace("DanyaVoredom/DanyExternal-Releases", repo)

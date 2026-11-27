@@ -27,7 +27,7 @@ import java.net.URL;
 import java.security.MessageDigest;
 
 public final class UpdateChecker {
-    private static final String API = "https://api.github.com/repos/DanyaVoredom/DanyExternal-Releases/releases?per_page=10";
+    private static final String API = "https://api.github.com/repos/DanyaVoredom/DanyExternal-Releases/releases?per_page=100";
     private static final String PREFS = "vk_mod_updater";
     private static final long CHECK_INTERVAL_MS = 5L * 60L * 1000L;
 

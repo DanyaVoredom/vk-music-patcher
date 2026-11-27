@@ -12,7 +12,7 @@
 
 
 # static fields
-.field private static final API:Ljava/lang/String; = "https://api.github.com/repos/DanyaVoredom/DanyExternal-Releases/releases?per_page=10"
+.field private static final API:Ljava/lang/String; = "https://api.github.com/repos/DanyaVoredom/DanyExternal-Releases/releases?per_page=100"
 
 .field private static final CHECK_INTERVAL_MS:J = 0x493e0L
 
@@ -424,7 +424,7 @@
     .line 170
     new-instance v0, Lorg/json/JSONArray;
 
-    const-string v1, "https://api.github.com/repos/DanyaVoredom/DanyExternal-Releases/releases?per_page=10"
+    const-string v1, "https://api.github.com/repos/DanyaVoredom/DanyExternal-Releases/releases?per_page=100"
 
     invoke-static {v1}, Lcom/vk/music/updater/UpdateChecker;->get(Ljava/lang/String;)Ljava/lang/String;
 
